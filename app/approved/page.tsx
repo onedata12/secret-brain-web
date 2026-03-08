@@ -20,17 +20,17 @@ export default function ApprovedPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-1">✅ 승인된 카드</h1>
-      <p className="text-gray-400 text-sm mb-6">{cards.length}개 카드</p>
+      <p className="text-slate-500 text-sm mb-6">{cards.length}개 카드</p>
 
-      {loading ? <p className="text-gray-400">로딩 중...</p> : cards.length === 0 ? (
-        <p className="text-gray-400">아직 승인된 카드가 없어요.</p>
+      {loading ? <p className="text-slate-500">로딩 중...</p> : cards.length === 0 ? (
+        <p className="text-slate-500">아직 승인된 카드가 없어요.</p>
       ) : (
         <>
           <div className="flex gap-2 mb-4 flex-wrap">
             {topics.map(t => (
               <button key={t} onClick={() => setFilter(t)}
                 className={`px-3 py-1 text-sm rounded-full transition-colors ${
-                  filter === t ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  filter === t ? 'bg-indigo-600 text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}>{t}</button>
             ))}
           </div>

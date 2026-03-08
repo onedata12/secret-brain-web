@@ -88,29 +88,29 @@ export default function PodcastPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-1">🎙️ 데일리 팟캐스트</h1>
-      <p className="text-gray-400 text-sm mb-6">운동하면서, 출퇴근하면서 논문 공부</p>
+      <p className="text-slate-500 text-sm mb-6">운동하면서, 출퇴근하면서 논문 공부</p>
 
       {cards.length === 0 ? (
-        <p className="text-gray-400">승인된 카드가 없어요. 먼저 카드를 승인해주세요.</p>
+        <p className="text-slate-500">승인된 카드가 없어요. 먼저 카드를 승인해주세요.</p>
       ) : (
         <div className="space-y-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-5">
-            <p className="text-sm text-gray-400 mb-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-5">
+            <p className="text-sm text-slate-500 mb-4">
               승인된 카드 {cards.length}개 기반 · 예상 재생시간 약 {Math.ceil(cards.slice(0,5).length * 4)}분
             </p>
             <button onClick={generateScript} disabled={generating}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white py-3 rounded-lg font-medium transition-colors">
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-slate-900 py-3 rounded-lg font-medium transition-colors">
               {generating ? '스크립트 생성 중... (약 20초)' : '🎙️ 오늘의 팟캐스트 생성'}
             </button>
           </div>
 
           {script && (
-            <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 space-y-4">
+            <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
               {/* 플레이어 */}
-              <div className="bg-gray-800 rounded-xl p-4 space-y-3">
+              <div className="bg-slate-100 rounded-xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium">🎧 오늘의 논문 브리핑</p>
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-slate-500">
                     {speaking ? formatTime(elapsed) : '0:00'} / ~{formatTime(estimatedDuration)}
                   </span>
                 </div>
@@ -124,20 +124,20 @@ export default function PodcastPage() {
                 {/* 컨트롤 */}
                 <div className="flex items-center gap-3">
                   <button onClick={togglePlay}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                    className="bg-indigo-600 hover:bg-indigo-700 text-slate-900 px-4 py-2 rounded-lg text-sm font-medium">
                     {speaking && !paused ? '⏸ 일시정지' : speaking && paused ? '▶ 계속' : '▶ 재생'}
                   </button>
                   {speaking && (
-                    <button onClick={stop} className="bg-gray-700 text-gray-300 px-3 py-2 rounded-lg text-sm hover:bg-gray-600">
+                    <button onClick={stop} className="bg-gray-700 text-slate-600 px-3 py-2 rounded-lg text-sm hover:bg-slate-300">
                       ⏹
                     </button>
                   )}
                   <div className="flex items-center gap-1 ml-auto">
-                    <span className="text-xs text-gray-500 mr-1">배속:</span>
+                    <span className="text-xs text-slate-400 mr-1">배속:</span>
                     {[0.8, 1.0, 1.25, 1.5, 2.0].map(r => (
                       <button key={r} onClick={() => changeRate(r)}
                         className={`text-xs px-2 py-1 rounded transition-colors ${
-                          rate === r ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                          rate === r ? 'bg-indigo-600 text-slate-900' : 'bg-gray-700 text-slate-500 hover:bg-slate-300'
                         }`}>
                         {r}x
                       </button>
@@ -148,8 +148,8 @@ export default function PodcastPage() {
 
               {/* 스크립트 */}
               <details>
-                <summary className="text-sm text-gray-400 cursor-pointer hover:text-gray-200">📝 스크립트 보기</summary>
-                <p className="mt-2 text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{script}</p>
+                <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-700">📝 스크립트 보기</summary>
+                <p className="mt-2 text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">{script}</p>
               </details>
             </div>
           )}

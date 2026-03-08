@@ -78,7 +78,7 @@ export default function StudyPage() {
         {(['review', 'feynman'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-              tab === t ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              tab === t ? 'bg-indigo-600 text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}>
             {t === 'review' ? '🔔 복습 알림' : '🎓 파인만 모드'}
           </button>
@@ -88,42 +88,42 @@ export default function StudyPage() {
       {tab === 'review' && (
         <div>
           {dueCards.length === 0 ? (
-            <div className="bg-gray-900 border border-gray-700 rounded-xl p-8 text-center">
+            <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
               <p className="text-green-400 font-medium">✅ 오늘 복습할 카드가 없어!</p>
-              <p className="text-gray-400 text-sm mt-1">총 {cards.length}개 카드 관리 중</p>
+              <p className="text-slate-500 text-sm mt-1">총 {cards.length}개 카드 관리 중</p>
             </div>
           ) : (
             <div className="space-y-4">
               <p className="text-indigo-300">🔔 {dueCards.length}개 복습할 카드가 있어!</p>
               {dueCards.map(card => (
-                <div key={card.id} className="bg-gray-900 border border-gray-700 rounded-xl p-5">
-                  <p className="font-bold text-white">{card.headline}</p>
-                  <p className="text-xs text-gray-400 mt-1">{card.evidence_level} · {card.topic} · 복습 {(card.review_log || []).length}회차</p>
+                <div key={card.id} className="bg-white border border-slate-200 rounded-xl p-5">
+                  <p className="font-bold text-slate-900">{card.headline}</p>
+                  <p className="text-xs text-slate-500 mt-1">{card.evidence_level} · {card.topic} · 복습 {(card.review_log || []).length}회차</p>
 
                   {!recallState[card.id] ? (
                     <div className="mt-4 space-y-3">
-                      <p className="text-sm text-gray-300">이 논문에서 배운 거 뭐였지? 먼저 떠올려봐 👇</p>
+                      <p className="text-sm text-slate-600">이 논문에서 배운 거 뭐였지? 먼저 떠올려봐 👇</p>
                       <textarea
                         placeholder="기억나는 대로 써봐 (틀려도 괜찮아)"
-                        className="w-full bg-gray-800 text-sm text-gray-200 rounded-lg p-3 outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
+                        className="w-full bg-slate-100 text-sm text-slate-700 rounded-lg p-3 outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
                         rows={3}
                         onChange={e => setRecallState(prev => ({ ...prev, [`draft_${card.id}`]: e.target.value }))}
                       />
                       <div className="flex gap-2">
                         <button onClick={() => setRecallState(prev => ({ ...prev, [card.id]: prev[`draft_${card.id}`] || '(비워둠)' }))}
-                          className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-indigo-700">확인하기</button>
+                          className="bg-indigo-600 text-slate-900 text-sm px-4 py-2 rounded-lg hover:bg-indigo-700">확인하기</button>
                         <button onClick={() => setRecallState(prev => ({ ...prev, [card.id]: '(스킵)' }))}
-                          className="bg-gray-700 text-gray-300 text-sm px-4 py-2 rounded-lg hover:bg-gray-600">바로 정답 보기</button>
+                          className="bg-gray-700 text-slate-600 text-sm px-4 py-2 rounded-lg hover:bg-slate-300">바로 정답 보기</button>
                       </div>
                     </div>
                   ) : (
                     <div className="mt-4 space-y-3">
-                      <div className="bg-indigo-900/30 border border-indigo-800 rounded-lg p-3">
+                      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
                         <p className="text-sm font-medium">💡 {card.one_line}</p>
                       </div>
-                      <p className="text-sm text-gray-300">{card.easy_explanation}</p>
+                      <p className="text-sm text-slate-600">{card.easy_explanation}</p>
                       <button onClick={() => markReviewed(card)}
-                        className="bg-green-700 hover:bg-green-600 text-white text-sm px-4 py-2 rounded-lg">
+                        className="bg-green-700 hover:bg-green-600 text-slate-900 text-sm px-4 py-2 rounded-lg">
                         ✅ 복습 완료
                       </button>
                     </div>
@@ -137,33 +137,33 @@ export default function StudyPage() {
 
       {tab === 'feynman' && (
         <div>
-          <p className="text-gray-400 text-sm mb-4">Claude가 완전히 모르는 척하고 질문을 던져. 설명하다 막히는 부분 = 아직 모르는 부분이야.</p>
+          <p className="text-slate-500 text-sm mb-4">Claude가 완전히 모르는 척하고 질문을 던져. 설명하다 막히는 부분 = 아직 모르는 부분이야.</p>
 
-          {cards.length === 0 ? <p className="text-gray-400">승인된 카드가 없어요.</p> : (
+          {cards.length === 0 ? <p className="text-slate-500">승인된 카드가 없어요.</p> : (
             <div className="space-y-4">
               <select value={feynmanCard?.id || ''} onChange={e => {
                 const card = cards.find(c => c.id === e.target.value)
                 setFeynmanCard(card || null)
                 setFeynmanMessages([])
-              }} className="bg-gray-800 text-gray-200 text-sm px-3 py-2 rounded-lg outline-none">
+              }} className="bg-slate-100 text-slate-700 text-sm px-3 py-2 rounded-lg outline-none">
                 {cards.map(c => (
                   <option key={c.id} value={c.id}>{c.headline} ({c.topic})</option>
                 ))}
               </select>
 
-              <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 space-y-3">
+              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   {feynmanMessages.map((m, i) => (
-                    <div key={i} className={`text-sm p-3 rounded-lg ${m.role === 'user' ? 'bg-indigo-900/40 ml-8' : 'bg-gray-800 mr-8'}`}>
-                      <p className="text-gray-200 whitespace-pre-wrap">{m.content}</p>
+                    <div key={i} className={`text-sm p-3 rounded-lg ${m.role === 'user' ? 'bg-indigo-900/40 ml-8' : 'bg-slate-100 mr-8'}`}>
+                      <p className="text-slate-700 whitespace-pre-wrap">{m.content}</p>
                     </div>
                   ))}
-                  {feynmanLoading && <p className="text-sm text-gray-400">생각 중...</p>}
+                  {feynmanLoading && <p className="text-sm text-slate-500">생각 중...</p>}
                 </div>
 
                 {feynmanMessages.length === 0 ? (
                   <button onClick={startFeynman}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-2 rounded-lg">
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-slate-900 text-sm py-2 rounded-lg">
                     🎓 파인만 모드 시작
                   </button>
                 ) : (
@@ -171,11 +171,11 @@ export default function StudyPage() {
                     <input value={feynmanInput} onChange={e => setFeynmanInput(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && sendFeynman()}
                       placeholder="설명해봐!"
-                      className="flex-1 bg-gray-800 text-sm text-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
+                      className="flex-1 bg-slate-100 text-sm text-slate-700 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
                     <button onClick={sendFeynman}
-                      className="bg-indigo-600 text-white text-sm px-3 py-2 rounded-lg hover:bg-indigo-700">전송</button>
+                      className="bg-indigo-600 text-slate-900 text-sm px-3 py-2 rounded-lg hover:bg-indigo-700">전송</button>
                     <button onClick={() => setFeynmanMessages([])}
-                      className="bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg hover:bg-gray-600">🔄</button>
+                      className="bg-gray-700 text-slate-600 text-sm px-3 py-2 rounded-lg hover:bg-slate-300">🔄</button>
                   </div>
                 )}
               </div>

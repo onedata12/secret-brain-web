@@ -40,8 +40,6 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
   const [chatLoading, setChatLoading] = useState(false)
   const [deepAnalysis, setDeepAnalysis] = useState('')
   const [deepLoading, setDeepLoading] = useState(false)
-  const [showDeep, setShowDeep] = useState(false)
-  const [showChat, setShowChat] = useState(false)
   const [showReader, setShowReader] = useState(false)
   const [sentences, setSentences] = useState<{ id: number; en: string; ko: string }[]>([])
   const [translateLoading, setTranslateLoading] = useState(false)
@@ -102,39 +100,39 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
   const audioText = `${card.headline}. ${card.easy_explanation} ${card.why_important} 시크릿 브레인 인사이트입니다. ${card.secret_brain_insight}`
 
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 space-y-4">
+    <div className="bg-white border border-slate-200 rounded-xl p-4 md:p-5 space-y-4 shadow-sm">
       {/* 헤더 */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-bold text-white">{card.headline}</h3>
-          <p className="text-xs text-gray-400 mt-1">
+          <h3 className="text-base md:text-lg font-bold text-slate-900">{card.headline}</h3>
+          <p className="text-xs text-slate-500 mt-1">
             {card.evidence_level} · 📌 {card.topic} · {card.year}년 · 인용 {card.citations}회
           </p>
         </div>
         {card.doi_url && (
           <a href={card.doi_url} target="_blank" rel="noopener noreferrer"
-            className="shrink-0 text-xs text-indigo-400 hover:underline">원문 →</a>
+            className="shrink-0 text-xs text-indigo-600 hover:underline font-medium">원문 →</a>
         )}
       </div>
 
       {/* 신뢰도 */}
-      <div className="bg-gray-800 rounded-lg p-3">
-        <p className="text-sm font-medium">{trust.stars} {trust.label}</p>
-        <p className="text-xs text-gray-400 mt-1">{trust.desc}</p>
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+        <p className="text-sm font-medium text-slate-800">{trust.stars} {trust.label}</p>
+        <p className="text-xs text-slate-500 mt-1">{trust.desc}</p>
       </div>
 
       {/* 핵심 */}
-      <div className="bg-indigo-900/30 border border-indigo-800 rounded-lg p-3">
-        <p className="text-sm"><span className="font-bold">💡 핵심:</span> {card.one_line}</p>
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+        <p className="text-sm text-indigo-900"><span className="font-bold">💡 핵심:</span> {card.one_line}</p>
       </div>
 
       {/* 탭 */}
       <div>
-        <div className="flex gap-1 mb-3">
+        <div className="flex gap-1 mb-3 flex-wrap">
           {(['explain', 'sns', 'landing'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
-              className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
-                tab === t ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
+                tab === t ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}>
               {t === 'explain' ? '🗣️ 쉬운 설명' : t === 'sns' ? '📱 SNS 문구' : '🏠 랜딩 문구'}
             </button>
@@ -143,32 +141,30 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
 
         {tab === 'explain' && (
           <div className="space-y-2">
-            <p className="text-sm text-gray-200 leading-relaxed">{card.easy_explanation}</p>
-            <p className="text-sm text-gray-400 italic">{card.why_important}</p>
-            <div className="bg-purple-900/30 border border-purple-800 rounded-lg p-3 mt-2">
-              <p className="text-sm text-purple-200">{card.secret_brain_insight}</p>
+            <p className="text-sm text-slate-700 leading-relaxed">{card.easy_explanation}</p>
+            <p className="text-sm text-slate-500 italic">{card.why_important}</p>
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mt-2">
+              <p className="text-sm text-purple-800">{card.secret_brain_insight}</p>
             </div>
           </div>
         )}
 
         {tab === 'sns' && (
-          <div className="space-y-2">
-            <div className="bg-gray-800 rounded-lg p-3 relative">
-              <p className="text-sm text-gray-200 whitespace-pre-wrap">{card.sns_copy}</p>
-              <button onClick={() => copy(card.sns_copy, 'sns')}
-                className="absolute top-2 right-2 text-xs text-gray-400 hover:text-white">
-                {copied === 'sns' ? '✅ 복사됨' : '📋 복사'}
-              </button>
-            </div>
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 relative">
+            <p className="text-sm text-slate-700 whitespace-pre-wrap pr-16">{card.sns_copy}</p>
+            <button onClick={() => copy(card.sns_copy, 'sns')}
+              className="absolute top-2 right-2 text-xs text-slate-400 hover:text-slate-700 bg-white border border-slate-200 px-2 py-1 rounded">
+              {copied === 'sns' ? '✅' : '📋 복사'}
+            </button>
           </div>
         )}
 
         {tab === 'landing' && (
-          <div className="bg-gray-800 rounded-lg p-3 relative">
-            <p className="text-sm text-gray-200 whitespace-pre-wrap">{card.landing_copy}</p>
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 relative">
+            <p className="text-sm text-slate-700 whitespace-pre-wrap pr-16">{card.landing_copy}</p>
             <button onClick={() => copy(card.landing_copy, 'landing')}
-              className="absolute top-2 right-2 text-xs text-gray-400 hover:text-white">
-              {copied === 'landing' ? '✅ 복사됨' : '📋 복사'}
+              className="absolute top-2 right-2 text-xs text-slate-400 hover:text-slate-700 bg-white border border-slate-200 px-2 py-1 rounded">
+              {copied === 'landing' ? '✅' : '📋 복사'}
             </button>
           </div>
         )}
@@ -178,33 +174,33 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
       {card.keywords?.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {card.keywords.map(k => (
-            <span key={k} className="bg-gray-800 text-gray-300 text-xs px-2 py-0.5 rounded">{k}</span>
+            <span key={k} className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">{k}</span>
           ))}
         </div>
       )}
 
       {/* 오디오 */}
-      <div className="border-t border-gray-800 pt-3 space-y-2">
+      <div className="border-t border-slate-100 pt-3 space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => tts.toggle(audioText)}
-            className={`text-sm px-3 py-1.5 rounded-lg transition-colors ${
-              tts.speaking ? 'bg-red-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+            className={`text-sm px-3 py-1.5 rounded-lg transition-colors font-medium ${
+              tts.speaking ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}>
             {tts.speaking && !tts.paused ? '⏸ 일시정지' : tts.speaking && tts.paused ? '▶ 계속' : '🔊 오디오로 듣기'}
           </button>
           {tts.speaking && (
-            <button onClick={tts.stop} className="text-xs bg-gray-800 text-gray-400 px-2 py-1.5 rounded-lg hover:bg-gray-700">⏹</button>
+            <button onClick={tts.stop} className="text-xs bg-slate-100 text-slate-500 px-2 py-1.5 rounded-lg hover:bg-slate-200">⏹</button>
           )}
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-slate-400">
             {tts.speaking ? `${tts.formatTime(tts.elapsed)} / ` : ''}~{tts.formatTime(tts.estimateDuration(audioText))}
           </span>
         </div>
         <div className="flex items-center gap-1">
-          <span className="text-xs text-gray-500 mr-1">배속:</span>
+          <span className="text-xs text-slate-400 mr-1">배속:</span>
           {[0.8, 1.0, 1.25, 1.5, 2.0].map(r => (
             <button key={r} onClick={() => tts.changeRate(r, tts.speaking ? audioText : undefined)}
               className={`text-xs px-2 py-1 rounded transition-colors ${
-                tts.rate === r ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                tts.rate === r ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
               }`}>
               {r}x
             </button>
@@ -213,33 +209,33 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
       </div>
 
       {/* 논문 정보 */}
-      <details className="border-t border-gray-800 pt-3">
-        <summary className="text-sm text-gray-400 cursor-pointer hover:text-gray-200">📄 논문 정보</summary>
-        <div className="mt-2 space-y-1 text-sm text-gray-300">
-          <p><span className="text-gray-500">제목:</span> {card.paper_title}</p>
-          <p><span className="text-gray-500">저자:</span> {card.authors?.join(', ')}</p>
-          <div className="flex gap-2 mt-2">
+      <details className="border-t border-slate-100 pt-3">
+        <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-800 font-medium">📄 논문 정보</summary>
+        <div className="mt-2 space-y-1 text-sm text-slate-600">
+          <p><span className="text-slate-400">제목:</span> {card.paper_title}</p>
+          <p><span className="text-slate-400">저자:</span> {card.authors?.join(', ')}</p>
+          <div className="flex gap-3 mt-2">
             {card.pdf_url && (
               <a href={card.pdf_url} target="_blank" rel="noopener noreferrer"
-                className="text-xs text-indigo-400 hover:underline">📥 PDF 무료 다운로드</a>
+                className="text-xs text-indigo-600 hover:underline">📥 PDF 무료 다운로드</a>
             )}
             {card.doi_url && (
               <a href={card.doi_url} target="_blank" rel="noopener noreferrer"
-                className="text-xs text-indigo-400 hover:underline">🔗 저널 페이지</a>
+                className="text-xs text-indigo-600 hover:underline">🔗 저널 페이지</a>
             )}
           </div>
         </div>
       </details>
 
       {/* 심층 분석 */}
-      <details className="border-t border-gray-800 pt-3" onToggle={e => {
+      <details className="border-t border-slate-100 pt-3" onToggle={e => {
         if ((e.target as HTMLDetailsElement).open && !deepAnalysis && !deepLoading) loadDeepAnalysis()
       }}>
-        <summary className="text-sm text-gray-400 cursor-pointer hover:text-gray-200">🎓 깊이 공부하기</summary>
-        <div className="mt-2">
-          {deepLoading ? <p className="text-sm text-gray-400">분석 중...</p>
+        <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-800 font-medium">🎓 깊이 공부하기</summary>
+        <div className="mt-3">
+          {deepLoading ? <p className="text-sm text-slate-400">분석 중...</p>
             : deepAnalysis ? (
-              <div className="text-sm text-gray-200 leading-relaxed prose prose-invert prose-sm max-w-none">
+              <div className="prose prose-sm max-w-none text-slate-700">
                 <ReactMarkdown>{deepAnalysis}</ReactMarkdown>
               </div>
             ) : null}
@@ -248,27 +244,27 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
 
       {/* 원문 읽기 */}
       {card.abstract_text && (
-        <details className="border-t border-gray-800 pt-3">
-          <summary className="text-sm text-gray-400 cursor-pointer hover:text-gray-200"
+        <details className="border-t border-slate-100 pt-3">
+          <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-800 font-medium"
             onClick={() => !showReader && loadTranslation()}>
             📖 초록 원문 읽기 (영/한)
           </summary>
-          {translateLoading && <p className="text-sm text-gray-400 mt-2">번역 중...</p>}
+          {translateLoading && <p className="text-sm text-slate-400 mt-2">번역 중...</p>}
           {showReader && sentences.length > 0 && (
-            <div className="mt-2 grid grid-cols-2 gap-4 max-h-80 overflow-y-auto">
+            <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 max-h-80 overflow-y-auto">
               <div>
-                <p className="text-xs text-gray-500 font-bold mb-2">🇺🇸 영문</p>
+                <p className="text-xs text-slate-400 font-bold mb-2">🇺🇸 영문</p>
                 {sentences.map(s => (
-                  <p key={s.id} className="text-xs text-gray-300 mb-2 leading-relaxed">
-                    <span className="text-gray-600 mr-1">{s.id}.</span>{s.en}
+                  <p key={s.id} className="text-xs text-slate-600 mb-2 leading-relaxed">
+                    <span className="text-slate-300 mr-1">{s.id}.</span>{s.en}
                   </p>
                 ))}
               </div>
               <div>
-                <p className="text-xs text-gray-500 font-bold mb-2">🇰🇷 한국어</p>
+                <p className="text-xs text-slate-400 font-bold mb-2">🇰🇷 한국어</p>
                 {sentences.map(s => (
-                  <p key={s.id} className="text-xs text-gray-300 mb-2 leading-relaxed">
-                    <span className="text-gray-600 mr-1">{s.id}.</span>{s.ko}
+                  <p key={s.id} className="text-xs text-slate-600 mb-2 leading-relaxed">
+                    <span className="text-slate-300 mr-1">{s.id}.</span>{s.ko}
                   </p>
                 ))}
               </div>
@@ -278,30 +274,30 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
       )}
 
       {/* Q&A 채팅 */}
-      <details className="border-t border-gray-800 pt-3">
-        <summary className="text-sm text-gray-400 cursor-pointer hover:text-gray-200">💬 논문에 대해 질문하기</summary>
+      <details className="border-t border-slate-100 pt-3">
+        <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-800 font-medium">💬 논문에 대해 질문하기</summary>
         <div className="mt-2 space-y-2">
           {chatMessages.length === 0 && (
             <div className="flex flex-wrap gap-1">
               {['이 결과가 한국인에게도 적용돼?', '샘플 수가 충분한 거야?', '반대되는 연구도 있어?', '실생활에 어떻게 적용할 수 있어?'].map(q => (
                 <button key={q} onClick={() => sendChat(q)}
-                  className="text-xs bg-gray-800 text-gray-300 px-2 py-1 rounded hover:bg-gray-700">{q}</button>
+                  className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full hover:bg-slate-200">{q}</button>
               ))}
             </div>
           )}
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {chatMessages.map((m, i) => (
-              <div key={i} className={`text-sm p-2 rounded-lg ${m.role === 'user' ? 'bg-indigo-900/40 text-right' : 'bg-gray-800'}`}>
-                <p className="text-gray-200 whitespace-pre-wrap">{m.content}</p>
+              <div key={i} className={`text-sm p-2.5 rounded-lg ${m.role === 'user' ? 'bg-indigo-50 border border-indigo-100 ml-6' : 'bg-slate-50 border border-slate-100 mr-6'}`}>
+                <p className="text-slate-700 whitespace-pre-wrap">{m.content}</p>
               </div>
             ))}
-            {chatLoading && <p className="text-sm text-gray-400">생각 중...</p>}
+            {chatLoading && <p className="text-sm text-slate-400">생각 중...</p>}
           </div>
           <div className="flex gap-2">
             <input value={chatInput} onChange={e => setChatInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendChat()}
               placeholder="궁금한 거 물어봐"
-              className="flex-1 bg-gray-800 text-sm text-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
+              className="flex-1 bg-slate-50 border border-slate-200 text-sm text-slate-800 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-300" />
             <button onClick={() => sendChat()}
               className="bg-indigo-600 text-white text-sm px-3 py-2 rounded-lg hover:bg-indigo-700">전송</button>
           </div>
@@ -310,13 +306,13 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
 
       {/* 승인/거절 */}
       {showActions && card.status === 'pending' && (
-        <div className="flex gap-2 border-t border-gray-800 pt-3">
+        <div className="flex gap-2 border-t border-slate-100 pt-3">
           <button onClick={() => onStatusChange?.(card.id, 'approved')}
-            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-2 rounded-lg font-medium transition-colors">
+            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-2.5 rounded-lg font-medium transition-colors">
             ✅ 승인
           </button>
           <button onClick={() => onStatusChange?.(card.id, 'rejected')}
-            className="flex-1 bg-gray-700 hover:bg-gray-600 text-white text-sm py-2 rounded-lg transition-colors">
+            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm py-2.5 rounded-lg transition-colors">
             ❌ 거절
           </button>
         </div>

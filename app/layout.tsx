@@ -8,18 +8,17 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: '시크릿 브레인 인사이트 뱅크',
   description: '논문 기반 콘텐츠 자동화',
+  viewport: 'width=device-width, initial-scale=1',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body className={`${inter.className} bg-gray-950 text-gray-100 min-h-screen`}>
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <main className="flex-1 ml-64 p-6">
-            {children}
-          </main>
-        </div>
+      <body className={`${inter.className} bg-slate-50 text-slate-900 min-h-screen`}>
+        <Sidebar />
+        <main className="md:ml-60 p-4 md:p-6 pt-16 md:pt-6 min-h-screen">
+          {children}
+        </main>
       </body>
     </html>
   )

@@ -33,13 +33,13 @@ export default function ReviewPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-1">📥 검토 대기</h1>
-      <p className="text-gray-400 text-sm mb-6">총 {cards.length}개 카드</p>
+      <p className="text-slate-500 text-sm mb-6">총 {cards.length}개 카드</p>
 
       {loading ? (
-        <p className="text-gray-400">로딩 중...</p>
+        <p className="text-slate-500">로딩 중...</p>
       ) : cards.length === 0 ? (
-        <div className="bg-gray-900 border border-gray-700 rounded-xl p-8 text-center">
-          <p className="text-gray-400">검토할 카드가 없어요.</p>
+        <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
+          <p className="text-slate-500">검토할 카드가 없어요.</p>
           <a href="/collect" className="text-indigo-400 text-sm hover:underline mt-2 block">수집 실행 →</a>
         </div>
       ) : (
@@ -48,7 +48,7 @@ export default function ReviewPage() {
             {topics.map(t => (
               <button key={t} onClick={() => setFilter(t)}
                 className={`px-3 py-1 text-sm rounded-full transition-colors ${
-                  filter === t ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  filter === t ? 'bg-indigo-600 text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}>{t}</button>
             ))}
           </div>

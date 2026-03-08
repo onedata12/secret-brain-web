@@ -46,17 +46,17 @@ export default function TopicsPage() {
     <div>
       <h1 className="text-2xl font-bold mb-6">⚙️ 주제 관리</h1>
 
-      <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 mb-6">
+      <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6">
         <h2 className="font-semibold mb-3">현재 주제 ({topics.length}개)</h2>
         {topics.length === 0 ? (
-          <p className="text-gray-400 text-sm">주제가 없어요. 아래에서 추가해보세요.</p>
+          <p className="text-slate-500 text-sm">주제가 없어요. 아래에서 추가해보세요.</p>
         ) : (
           <div className="space-y-2">
             {topics.map(t => (
-              <div key={t.id} className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
+              <div key={t.id} className="flex items-center justify-between bg-slate-100 rounded-lg px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-white">{t.name}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{t.query}</p>
+                  <p className="text-sm font-medium text-slate-900">{t.name}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{t.query}</p>
                 </div>
                 <button onClick={() => remove(t.id)}
                   className="text-xs text-red-400 hover:text-red-300 ml-4 shrink-0">삭제</button>
@@ -66,36 +66,36 @@ export default function TopicsPage() {
         )}
       </div>
 
-      <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 mb-6">
+      <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6">
         <h2 className="font-semibold mb-4">새 주제 추가</h2>
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">주제 이름 (한국어)</label>
+            <label className="text-xs text-slate-500 mb-1 block">주제 이름 (한국어)</label>
             <input value={name} onChange={e => setName(e.target.value)}
               placeholder="예: 수면과 인지능력"
-              className="w-full bg-gray-800 text-sm text-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
+              className="w-full bg-slate-100 text-sm text-slate-700 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">검색 쿼리 (영어)</label>
+            <label className="text-xs text-slate-500 mb-1 block">검색 쿼리 (영어)</label>
             <input value={query} onChange={e => setQuery(e.target.value)}
               placeholder="예: sleep cognitive performance meta-analysis"
-              className="w-full bg-gray-800 text-sm text-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
+              className="w-full bg-slate-100 text-sm text-slate-700 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
           </div>
         </div>
         <button onClick={add} disabled={loading || !name || !query}
-          className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg">
+          className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-slate-900 text-sm px-4 py-2 rounded-lg">
           {loading ? '추가 중...' : '추가하기'}
         </button>
       </div>
 
-      <div className="bg-gray-900 border border-gray-700 rounded-xl p-5">
+      <div className="bg-white border border-slate-200 rounded-xl p-5">
         <h2 className="font-semibold mb-3">주제 예시</h2>
         <div className="grid grid-cols-2 gap-2">
           {EXAMPLES.map(e => (
             <button key={e.label} onClick={() => { setName(e.label); setQuery(e.query) }}
-              className="text-left bg-gray-800 hover:bg-gray-700 rounded-lg p-3 transition-colors">
-              <p className="text-sm font-medium text-white">{e.label}</p>
-              <p className="text-xs text-gray-400 mt-0.5 truncate">{e.query}</p>
+              className="text-left bg-slate-100 hover:bg-slate-200 rounded-lg p-3 transition-colors">
+              <p className="text-sm font-medium text-slate-900">{e.label}</p>
+              <p className="text-xs text-slate-500 mt-0.5 truncate">{e.query}</p>
             </button>
           ))}
         </div>

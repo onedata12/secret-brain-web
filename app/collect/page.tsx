@@ -54,47 +54,47 @@ export default function CollectPage() {
           { label: '승인 완료', value: stats.approved },
           { label: '거절', value: stats.cards - stats.pending - stats.approved },
         ].map(s => (
-          <div key={s.label} className="bg-gray-900 border border-gray-700 rounded-xl p-4 text-center">
+          <div key={s.label} className="bg-white border border-slate-200 rounded-xl p-4 text-center">
             <p className="text-2xl font-bold text-indigo-400">{s.value}</p>
-            <p className="text-sm text-gray-400 mt-1">{s.label}</p>
+            <p className="text-sm text-slate-500 mt-1">{s.label}</p>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-gray-900 border border-gray-700 rounded-xl p-5">
+        <div className="bg-white border border-slate-200 rounded-xl p-5">
           <h2 className="font-semibold mb-1">1단계: 논문 수집</h2>
-          <p className="text-xs text-gray-400 mb-4">Semantic Scholar에서 메타분석 논문 수집</p>
+          <p className="text-xs text-slate-500 mb-4">Semantic Scholar에서 메타분석 논문 수집</p>
           <button onClick={collect} disabled={collecting || generating}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium transition-colors">
+            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-slate-900 py-2.5 rounded-lg font-medium transition-colors">
             {collecting ? '수집 중...' : '🔍 논문 수집 시작'}
           </button>
         </div>
 
-        <div className="bg-gray-900 border border-gray-700 rounded-xl p-5">
+        <div className="bg-white border border-slate-200 rounded-xl p-5">
           <h2 className="font-semibold mb-1">2단계: 카드 생성</h2>
-          <p className="text-xs text-gray-400 mb-4">Claude AI가 논문을 인사이트 카드로 변환</p>
+          <p className="text-xs text-slate-500 mb-4">Claude AI가 논문을 인사이트 카드로 변환</p>
           <button onClick={generate} disabled={collecting || generating}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white py-2.5 rounded-lg font-medium transition-colors">
+            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-slate-900 py-2.5 rounded-lg font-medium transition-colors">
             {generating ? '생성 중...' : '🤖 카드 생성 시작'}
           </button>
         </div>
       </div>
 
-      <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 mb-6">
+      <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6">
         <h2 className="font-semibold mb-3">⚡ 한 번에 실행</h2>
         <button onClick={runAll} disabled={collecting || generating}
-          className="w-full bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white py-3 rounded-lg font-medium transition-colors">
+          className="w-full bg-green-700 hover:bg-green-600 disabled:opacity-50 text-slate-900 py-3 rounded-lg font-medium transition-colors">
           {collecting || generating ? '실행 중...' : '수집 + 카드 생성 한 번에'}
         </button>
       </div>
 
       {log.length > 0 && (
-        <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-4">
           <h2 className="font-semibold mb-3 text-sm">실행 로그</h2>
           <div className="space-y-1">
             {log.map((l, i) => (
-              <p key={i} className="text-sm text-gray-300 font-mono">{l}</p>
+              <p key={i} className="text-sm text-slate-600 font-mono">{l}</p>
             ))}
           </div>
         </div>
