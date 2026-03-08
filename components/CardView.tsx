@@ -45,6 +45,10 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
   const [translateLoading, setTranslateLoading] = useState(false)
   const [copied, setCopied] = useState('')
   const [speaking, setSpeaking] = useState(false)
+  const [speechRate, setSpeechRate] = useState(1.0)
+  const [elapsed, setElapsed] = useState(0)
+  const [estimatedDuration, setEstimatedDuration] = useState(0)
+  const timerRef = useState<ReturnType<typeof setInterval> | null>(null)
 
   const trust = getTrustInfo(card)
 
@@ -54,14 +58,52 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
     setTimeout(() => setCopied(''), 2000)
   }
 
-  const speak = (text: string) => {
-    if (speaking) { window.speechSynthesis.cancel(); setSpeaking(false); return }
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60)
+    const s = Math.floor(sec % 60)
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
+
+  const speak = (text: string, rate?: number) => {
+    if (speaking) {
+      window.speechSynthesis.cancel()
+      setSpeaking(false)
+      setElapsed(0)
+      if (timerRef[0]) clearInterval(timerRef[0])
+      return
+    }
+    const r = rate ?? speechRate
+    // 한국어 평균 발화 속도: 분당 약 300자, rate=1.0 기준
+    const estimated = Math.ceil((text.length / 300) * 60 / r)
+    setEstimatedDuration(estimated)
+    setElapsed(0)
+
     const utter = new SpeechSynthesisUtterance(text)
     utter.lang = 'ko-KR'
-    utter.rate = 1.0
-    utter.onend = () => setSpeaking(false)
+    utter.rate = r
+    utter.onend = () => {
+      setSpeaking(false)
+      setElapsed(0)
+      if (timerRef[0]) clearInterval(timerRef[0])
+    }
     window.speechSynthesis.speak(utter)
     setSpeaking(true)
+
+    const interval = setInterval(() => {
+      setElapsed(prev => prev + 1)
+    }, 1000)
+    timerRef[0] = interval
+  }
+
+  const changeRate = (rate: number) => {
+    setSpeechRate(rate)
+    if (speaking) {
+      window.speechSynthesis.cancel()
+      setSpeaking(false)
+      setElapsed(0)
+      if (timerRef[0]) clearInterval(timerRef[0])
+      setTimeout(() => speak(audioText, rate), 100)
+    }
   }
 
   const sendChat = async (msg?: string) => {
@@ -192,13 +234,39 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
       )}
 
       {/* 오디오 */}
-      <div className="border-t border-gray-800 pt-3">
-        <button onClick={() => speak(audioText)}
-          className={`text-sm px-3 py-1.5 rounded-lg transition-colors ${
-            speaking ? 'bg-red-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-          }`}>
-          {speaking ? '⏹ 정지' : '🔊 오디오로 듣기'}
-        </button>
+      <div className="border-t border-gray-800 pt-3 space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => speak(audioText)}
+            className={`text-sm px-3 py-1.5 rounded-lg transition-colors ${
+              speaking ? 'bg-red-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+            }`}>
+            {speaking ? '⏹ 정지' : '🔊 오디오로 듣기'}
+          </button>
+          {speaking && (
+            <span className="text-xs text-gray-400">
+              {formatTime(elapsed)} / ~{formatTime(estimatedDuration)}
+            </span>
+          )}
+          {!speaking && estimatedDuration > 0 && (
+            <span className="text-xs text-gray-500">~{formatTime(estimatedDuration)}</span>
+          )}
+          {!speaking && estimatedDuration === 0 && (
+            <span className="text-xs text-gray-500">
+              ~{formatTime(Math.ceil((audioText.length / 300) * 60 / speechRate))}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-gray-500 mr-1">배속:</span>
+          {[0.8, 1.0, 1.25, 1.5, 2.0].map(r => (
+            <button key={r} onClick={() => changeRate(r)}
+              className={`text-xs px-2 py-1 rounded transition-colors ${
+                speechRate === r ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              }`}>
+              {r}x
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 논문 정보 */}

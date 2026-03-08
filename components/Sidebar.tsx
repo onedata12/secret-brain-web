@@ -5,9 +5,9 @@ import { usePathname } from 'next/navigation'
 const menus = [
   { href: '/review', label: '📥 검토 대기' },
   { href: '/approved', label: '✅ 승인된 카드' },
+  { href: '/podcast', label: '🎙️ 데일리 팟캐스트' },
   { href: '/bank', label: '📊 콘텐츠 뱅크' },
   { href: '/study', label: '🧠 복습 & 파인만' },
-  { href: '/reader', label: '📖 논문 원문 읽기' },
   { href: '/topics', label: '⚙️ 주제 관리' },
   { href: '/collect', label: '🚀 수집 실행' },
 ]
