@@ -30,7 +30,7 @@ export default function ApprovedPage() {
             {topics.map(t => (
               <button key={t} onClick={() => setFilter(t)}
                 className={`px-3 py-1 text-sm rounded-full transition-colors ${
-                  filter === t ? 'bg-indigo-600 text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  filter === t ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}>{t}</button>
             ))}
           </div>

@@ -1,8 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import type { Card } from '@/lib/supabase'
-import { useTTS } from './useTTS'
 
 function getTrustInfo(card: Card) {
   const evidence = card.evidence_level || ''
@@ -44,7 +43,10 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
   const [sentences, setSentences] = useState<{ id: number; en: string; ko: string }[]>([])
   const [translateLoading, setTranslateLoading] = useState(false)
   const [copied, setCopied] = useState('')
-  const tts = useTTS()
+  const [audioUrl, setAudioUrl] = useState('')
+  const [audioLoading, setAudioLoading] = useState(false)
+  const [playbackRate, setPlaybackRate] = useState(1.0)
+  const audioRef = useRef<HTMLAudioElement>(null)
 
   const trust = getTrustInfo(card)
 
@@ -98,6 +100,24 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
   }
 
   const audioText = `${card.headline}. ${card.easy_explanation} ${card.why_important} 시크릿 브레인 인사이트입니다. ${card.secret_brain_insight}`
+
+  const loadAudio = async () => {
+    if (audioUrl) return
+    setAudioLoading(true)
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ card })
+    })
+    const blob = await res.blob()
+    setAudioUrl(URL.createObjectURL(blob))
+    setAudioLoading(false)
+  }
+
+  const changeSpeed = (r: number) => {
+    setPlaybackRate(r)
+    if (audioRef.current) audioRef.current.playbackRate = r
+  }
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 md:p-5 space-y-4 shadow-sm">
@@ -181,31 +201,35 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
 
       {/* 오디오 */}
       <div className="border-t border-slate-100 pt-3 space-y-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => tts.toggle(audioText)}
-            className={`text-sm px-3 py-1.5 rounded-lg transition-colors font-medium ${
-              tts.speaking ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}>
-            {tts.speaking && !tts.paused ? '⏸ 일시정지' : tts.speaking && tts.paused ? '▶ 계속' : '🔊 오디오로 듣기'}
+        {!audioUrl ? (
+          <button onClick={loadAudio} disabled={audioLoading}
+            className="text-sm px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50 font-medium transition-colors">
+            {audioLoading ? '⏳ 나레이션 생성 중... (약 30초)' : '🔊 10분 나레이션 듣기'}
           </button>
-          {tts.speaking && (
-            <button onClick={tts.stop} className="text-xs bg-slate-100 text-slate-500 px-2 py-1.5 rounded-lg hover:bg-slate-200">⏹</button>
-          )}
-          <span className="text-xs text-slate-400">
-            {tts.speaking ? `${tts.formatTime(tts.elapsed)} / ` : ''}~{tts.formatTime(tts.estimateDuration(audioText))}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-slate-400 mr-1">배속:</span>
-          {[0.8, 1.0, 1.25, 1.5, 2.0].map(r => (
-            <button key={r} onClick={() => tts.changeRate(r, tts.speaking ? audioText : undefined)}
-              className={`text-xs px-2 py-1 rounded transition-colors ${
-                tts.rate === r ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-              }`}>
-              {r}x
-            </button>
-          ))}
-        </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-slate-400">🎙️ Microsoft Neural 음성</p>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-slate-400 mr-1">배속:</span>
+                {[0.8, 1.0, 1.25, 1.5, 2.0].map(r => (
+                  <button key={r} onClick={() => changeSpeed(r)}
+                    className={`text-xs px-2 py-0.5 rounded transition-colors ${
+                      playbackRate === r
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}>
+                    {r}x
+                  </button>
+                ))}
+              </div>
+            </div>
+            <audio ref={audioRef} src={audioUrl} controls
+              className="w-full h-10"
+              style={{ colorScheme: 'light' }}
+            />
+          </div>
+        )}
       </div>
 
       {/* 논문 정보 */}
@@ -236,7 +260,14 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
           {deepLoading ? <p className="text-sm text-slate-400">분석 중...</p>
             : deepAnalysis ? (
               <div className="prose prose-sm max-w-none text-slate-700">
-                <ReactMarkdown>{deepAnalysis}</ReactMarkdown>
+                <ReactMarkdown
+                  components={{
+                    hr: () => <hr className="border-t border-slate-200 my-3" />,
+                    h1: ({children}) => <h1 className="text-base font-bold mt-4 mb-1 text-slate-800">{children}</h1>,
+                    h2: ({children}) => <h2 className="text-sm font-bold mt-3 mb-1 text-slate-800">{children}</h2>,
+                    h3: ({children}) => <h3 className="text-sm font-semibold mt-2 mb-1 text-slate-700">{children}</h3>,
+                  }}
+                >{deepAnalysis}</ReactMarkdown>
               </div>
             ) : null}
         </div>
