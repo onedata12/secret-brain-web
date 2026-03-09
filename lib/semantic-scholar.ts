@@ -49,8 +49,6 @@ export async function searchPapers(topic: string, maxResults = 20) {
     fields: 'title,abstract,year,authors,citationCount,externalIds,openAccessPdf,publicationTypes'
   })
 
-  await new Promise(r => setTimeout(r, 1000))
-
   const res = await fetch(`https://api.semanticscholar.org/graph/v1/paper/search?${params}`)
   if (!res.ok) throw new Error(`Semantic Scholar API error: ${res.status}`)
 

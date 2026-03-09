@@ -99,7 +99,18 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
     setTranslateLoading(false)
   }
 
-  const audioText = `${card.headline}. ${card.easy_explanation} ${card.why_important} 시크릿 브레인 인사이트입니다. ${card.secret_brain_insight}`
+  const audioText = [
+    `오늘의 논문 인사이트입니다.`,
+    `${card.headline}.`,
+    `핵심 한 줄 요약. ${card.one_line}.`,
+    `쉬운 설명. ${card.easy_explanation}`,
+    `왜 중요한가. ${card.why_important}`,
+    `시크릿 브레인 인사이트. ${card.secret_brain_insight}`,
+    card.landing_copy ? `마케팅 관점에서 보면. ${card.landing_copy}` : '',
+    `이 연구는 ${card.year}년에 발표된 ${card.evidence_level}으로, 지금까지 ${card.citations}회 인용되었습니다.`,
+    `논문 제목은 ${card.paper_title}입니다.`,
+    `이상으로 시크릿 브레인 논문 브리핑을 마칩니다. 오늘 배운 내용을 삶에 적용해보세요.`,
+  ].filter(Boolean).join(' ')
 
   const loadAudio = async () => {
     if (audioUrl) return
@@ -107,7 +118,7 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
     const res = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ card })
+      body: JSON.stringify({ text: audioText })
     })
     const blob = await res.blob()
     setAudioUrl(URL.createObjectURL(blob))
@@ -204,7 +215,7 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
         {!audioUrl ? (
           <button onClick={loadAudio} disabled={audioLoading}
             className="text-sm px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50 font-medium transition-colors">
-            {audioLoading ? '⏳ 나레이션 생성 중... (약 30초)' : '🔊 10분 나레이션 듣기'}
+            {audioLoading ? '⏳ 음성 생성 중...' : '🔊 오디오로 듣기'}
           </button>
         ) : (
           <div className="space-y-2">
