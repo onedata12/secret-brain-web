@@ -26,11 +26,21 @@ export default function ReviewPage() {
   const filtered = filter === '전체' ? cards : cards.filter(c => c.topic === filter)
   const filteredIds = filtered.map(c => c.id)
 
-  const handleStatusChange = async (id: string, status: 'approved' | 'rejected') => {
+  const handleApprove = async (id: string) => {
     await fetch('/api/cards', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status })
+      body: JSON.stringify({ id, status: 'approved' })
+    })
+    setCards(prev => prev.filter(c => c.id !== id))
+    setSelected(prev => { const n = new Set(prev); n.delete(id); return n })
+  }
+
+  const handleDelete = async (id: string) => {
+    await fetch('/api/cards', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
     })
     setCards(prev => prev.filter(c => c.id !== id))
     setSelected(prev => { const n = new Set(prev); n.delete(id); return n })
@@ -163,10 +173,6 @@ export default function ReviewPage() {
                       className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
                       ✅ 선택 승인 ({selected.size})
                     </button>
-                    <button onClick={() => bulkAction('rejected')} disabled={bulkLoading}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-50">
-                      ❌ 선택 거절 ({selected.size})
-                    </button>
                     <button onClick={() => bulkAction('delete')} disabled={bulkLoading}
                       className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 border border-red-200 disabled:opacity-50">
                       🗑 선택 삭제 ({selected.size})
@@ -191,24 +197,23 @@ export default function ReviewPage() {
           {/* 카드 목록 */}
           <div className="space-y-4">
             {filtered.map(card => (
-              <div key={card.id} className="relative">
-                {/* 체크박스 */}
+              <div key={card.id} className="flex items-start gap-3">
                 {selectMode && (
-                  <label className="absolute top-4 left-4 z-10 cursor-pointer">
+                  <label className="shrink-0 pt-5 cursor-pointer">
                     <input type="checkbox" checked={selected.has(card.id)}
                       onChange={() => toggleSelect(card.id)}
-                      className="w-4 h-4 accent-indigo-600" />
+                      className="w-5 h-5 accent-indigo-600" />
                   </label>
                 )}
-                <div className={selectMode ? 'pl-8' : ''}>
-                  <div onClick={selectMode ? () => toggleSelect(card.id) : undefined}
-                    className={selectMode ? `cursor-pointer ${selected.has(card.id) ? 'ring-2 ring-indigo-400 rounded-xl' : ''}` : ''}>
-                    <CardView
-                      card={card}
-                      showActions={!selectMode}
-                      onStatusChange={handleStatusChange}
-                    />
-                  </div>
+                <div className={`flex-1 min-w-0 ${selectMode && selected.has(card.id) ? 'ring-2 ring-indigo-400 rounded-xl' : ''}`}
+                  onClick={selectMode ? () => toggleSelect(card.id) : undefined}
+                  style={selectMode ? { cursor: 'pointer' } : {}}>
+                  <CardView
+                    card={card}
+                    showActions={!selectMode}
+                    onApprove={handleApprove}
+                    onDelete={handleDelete}
+                  />
                 </div>
               </div>
             ))}

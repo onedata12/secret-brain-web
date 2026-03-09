@@ -146,7 +146,8 @@ async function generateCard(paper: any, topic: string) {
 }
 
 export async function POST(req: Request) {
-  const { query } = await req.json()
+  const body = await req.json()
+  const { query, selectedPapers } = body  // selectedPapers: 미리 선택된 논문 배열
 
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
@@ -156,47 +157,52 @@ export async function POST(req: Request) {
       }
 
       try {
-        // 1. 검색어 변환
-        send({ pct: 3, msg: `🔍 "${query}" 검색어 변환 중...` })
-        const searchQuery = await queryToSearchTerms(query)
-        send({ pct: 8, msg: `📌 검색어: ${searchQuery}` })
+        let newPapers: any[]
+        let papers: any[] = []
 
-        // 2. OpenAlex 검색
-        send({ pct: 10, msg: '📚 OpenAlex에서 논문 검색 중...' })
-        const papers = await searchPapersOpenAlex(searchQuery, 20)
+        if (selectedPapers?.length) {
+          // 미리 선택된 논문 사용 (검색 단계 스킵)
+          send({ pct: 5, msg: `📋 선택한 ${selectedPapers.length}개 논문으로 카드 생성 시작` })
+          const { data: existingCards } = await supabase.from('cards').select('id')
+          const existingIds = new Set((existingCards || []).map((c: any) => c.id))
+          newPapers = selectedPapers
+            .filter((p: any) => !existingIds.has(p.paperId))
+            .map((p: any) => ({ ...p._raw, paperId: p.paperId, titleKo: p.titleKo }))
+          papers = newPapers
+          send({ pct: 10, msg: `✨ ${newPapers.length}개 신규 논문 처리 시작` })
+        } else {
+          // 기존 전체 검색 플로우
+          send({ pct: 3, msg: `🔍 "${query}" 검색어 변환 중...` })
+          const searchQuery = await queryToSearchTerms(query)
+          send({ pct: 8, msg: `📌 검색어: ${searchQuery}` })
 
-        if (!papers.length) {
-          send({ pct: 100, msg: '❌ 관련 논문을 찾지 못했어요.', done: true, added: 0, answer: '', papers: [] })
-          controller.close()
-          return
+          send({ pct: 10, msg: '📚 OpenAlex에서 논문 검색 중...' })
+          papers = await searchPapersOpenAlex(searchQuery, 20)
+
+          if (!papers.length) {
+            send({ pct: 100, msg: '❌ 관련 논문을 찾지 못했어요.', done: true, added: 0, answer: '', papers: [] })
+            controller.close()
+            return
+          }
+          send({ pct: 15, msg: `✅ ${papers.length}개 논문 발견!` })
+
+          send({ pct: 18, msg: '🌐 논문 제목 번역 중...' })
+          const koTitles = await translateTitles(papers)
+          const papersWithKo = papers.map((p: any, i: number) => ({ ...p, titleKo: koTitles[i] || p.title }))
+          send({ pct: 25, msg: '✅ 번역 완료!', papers: papersWithKo.map((p: any) => ({
+            paperId: p.paperId, titleEn: p.title, titleKo: p.titleKo,
+            year: p.year, citations: p.citationCount, evidenceLevel: p.evidenceLevel,
+            doiUrl: p.doiUrl, status: 'pending',
+          })) })
+
+          const { data: existingCards } = await supabase.from('cards').select('id')
+          const existingIds = new Set((existingCards || []).map((c: any) => c.id))
+          newPapers = papersWithKo.filter((p: any) => !existingIds.has(p.paperId)).slice(0, 10)
+          papers = papersWithKo
         }
-        send({ pct: 15, msg: `✅ ${papers.length}개 논문 발견!` })
-
-        // 3. 제목 한국어 번역
-        send({ pct: 18, msg: '🌐 논문 제목 번역 중...' })
-        const koTitles = await translateTitles(papers)
-        const papersWithKo = papers.map((p: any, i: number) => ({
-          ...p,
-          titleKo: koTitles[i] || p.title,
-        }))
-        send({ pct: 25, msg: '✅ 번역 완료!', papers: papersWithKo.map((p: any) => ({
-          paperId: p.paperId,
-          titleEn: p.title,
-          titleKo: p.titleKo,
-          year: p.year,
-          citations: p.citationCount,
-          evidenceLevel: p.evidenceLevel,
-          doiUrl: p.doiUrl,
-          status: 'pending',
-        })) })
-
-        // 4. 기존 카드 제외
-        const { data: existingCards } = await supabase.from('cards').select('id')
-        const existingIds = new Set((existingCards || []).map((c: any) => c.id))
-        const newPapers = papersWithKo.filter((p: any) => !existingIds.has(p.paperId)).slice(0, 10)
 
         if (!newPapers.length) {
-          send({ pct: 100, msg: '📌 이미 수집된 논문들이에요.', done: true, added: 0, answer: '', papers: papersWithKo })
+          send({ pct: 100, msg: '📌 이미 수집된 논문들이에요.', done: true, added: 0, answer: '' })
           controller.close()
           return
         }

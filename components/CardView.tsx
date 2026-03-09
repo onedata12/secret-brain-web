@@ -29,10 +29,11 @@ function getTrustInfo(card: Card) {
 type Props = {
   card: Card
   showActions?: boolean
-  onStatusChange?: (id: string, status: 'approved' | 'rejected') => void
+  onApprove?: (id: string) => void
+  onDelete?: (id: string) => void
 }
 
-export default function CardView({ card, showActions = true, onStatusChange }: Props) {
+export default function CardView({ card, showActions = true, onApprove, onDelete }: Props) {
   const [tab, setTab] = useState<'explain' | 'sns' | 'landing'>('explain')
   const [chatMessages, setChatMessages] = useState<{ role: string; content: string }[]>([])
   const [chatInput, setChatInput] = useState('')
@@ -134,9 +135,12 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
     <div className="bg-white border border-slate-200 rounded-xl p-4 md:p-5 space-y-4 shadow-sm">
       {/* 헤더 */}
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <h3 className="text-base md:text-lg font-bold text-slate-900">{card.headline}</h3>
-          <p className="text-xs text-slate-500 mt-1">
+          {card.paper_title && (
+            <p className="text-xs text-slate-600 mt-0.5 leading-snug font-medium">{card.paper_title}</p>
+          )}
+          <p className="text-xs text-slate-400 mt-1">
             {card.evidence_level} · 📌 {card.topic} · {card.year}년 · 인용 {card.citations}회
           </p>
         </div>
@@ -346,16 +350,16 @@ export default function CardView({ card, showActions = true, onStatusChange }: P
         </div>
       </details>
 
-      {/* 승인/거절 */}
+      {/* 승인/삭제 */}
       {showActions && card.status === 'pending' && (
         <div className="flex gap-2 border-t border-slate-100 pt-3">
-          <button onClick={() => onStatusChange?.(card.id, 'approved')}
+          <button onClick={() => onApprove?.(card.id)}
             className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-2.5 rounded-lg font-medium transition-colors">
             ✅ 승인
           </button>
-          <button onClick={() => onStatusChange?.(card.id, 'rejected')}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm py-2.5 rounded-lg transition-colors">
-            ❌ 거절
+          <button onClick={() => onDelete?.(card.id)}
+            className="flex-1 bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 text-sm py-2.5 rounded-lg transition-colors">
+            🗑 삭제
           </button>
         </div>
       )}
