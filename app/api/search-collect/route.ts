@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '@/lib/supabase'
-import { searchPapers } from '@/lib/semantic-scholar'
+import { searchPapersPubMed } from '@/lib/pubmed'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
     logs.push(`📌 검색어: ${searchQuery}`)
 
     // 2. 논문 검색
-    const papers = await searchPapers(searchQuery, 10)
+    const papers = await searchPapersPubMed(searchQuery, 10)
     if (!papers.length) {
       return NextResponse.json({ added: 0, logs, errors: ['관련 논문을 찾지 못했어요.'] })
     }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { searchPapers } from '@/lib/semantic-scholar'
+import { searchPapersPubMed } from '@/lib/pubmed'
 
 export async function GET() {
   // 오늘 수집할 주제 1개만 처리 (Vercel 10s 타임아웃 대응)
@@ -19,7 +19,7 @@ export async function GET() {
   const topic = topics[dayIndex]
 
   try {
-    const papers = await searchPapers(topic.query || topic.name)
+    const papers = await searchPapersPubMed(topic.query || topic.name)
     const newPapers = papers
       .filter((p: any) => !existingIds.has(p.paperId))
       .map((p: any) => ({
