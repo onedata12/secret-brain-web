@@ -1,23 +1,35 @@
-import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '@/lib/supabase'
 import { searchPapersPubMed } from '@/lib/pubmed'
 
+export const maxDuration = 60
+
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-// 자연어 질문 → Semantic Scholar 검색 쿼리 변환
 async function queryToSearchTerms(query: string): Promise<string> {
   const msg = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 100,
+    max_tokens: 150,
     messages: [{
       role: 'user',
-      content: `다음 질문을 Semantic Scholar에서 메타분석/체계적 문헌고찰을 찾기 위한 영어 검색 쿼리로 변환해줘. 쿼리만 반환, 설명 없이.
+      content: `Convert this Korean topic/question to an optimized PubMed search query in English for finding meta-analyses and systematic reviews.
 
-질문: "${query}"
+Korean: "${query}"
 
-예시 형식: "sleep quality cognitive performance meta-analysis"
-쿼리:`
+Rules:
+- Use specific scientific English terms, include synonyms with OR
+- Always end with: meta-analysis OR "systematic review"
+- Return ONLY the query string
+
+Examples:
+- "생산성" → "work productivity performance time management meta-analysis OR systematic review"
+- "수면" → "sleep quality cognitive performance insomnia meta-analysis OR systematic review"
+- "운동과 뇌" → "exercise physical activity cognitive function brain neuroplasticity meta-analysis OR systematic review"
+- "스트레스 줄이기" → "stress reduction psychological wellbeing burnout meta-analysis OR systematic review"
+- "습관 만들기" → "habit formation behavior change self-regulation meta-analysis OR systematic review"
+- "아침 루틴" → "morning routine circadian rhythm daily habits productivity meta-analysis OR systematic review"
+
+Query:`
     }]
   })
   return (msg.content[0] as { text: string }).text.trim().replace(/^"|"$/g, '')
@@ -78,53 +90,82 @@ async function generateCard(paper: any, topic: string) {
 
 export async function POST(req: Request) {
   const { query } = await req.json()
-  if (!query?.trim()) return NextResponse.json({ error: '검색어를 입력해주세요' }, { status: 400 })
 
-  const logs: string[] = []
-  const errors: string[] = []
-
-  try {
-    // 1. 검색 쿼리 최적화
-    logs.push(`🔍 "${query}" 검색 중...`)
-    const searchQuery = await queryToSearchTerms(query)
-    logs.push(`📌 검색어: ${searchQuery}`)
-
-    // 2. 논문 검색
-    const papers = await searchPapersPubMed(searchQuery, 10)
-    if (!papers.length) {
-      return NextResponse.json({ added: 0, logs, errors: ['관련 논문을 찾지 못했어요.'] })
-    }
-    logs.push(`📄 ${papers.length}개 논문 발견`)
-
-    // 3. 이미 있는 카드 확인
-    const { data: existingCards } = await supabase.from('cards').select('id')
-    const existingIds = new Set((existingCards || []).map((c: any) => c.id))
-    const newPapers = papers.filter((p: any) => !existingIds.has(p.paperId)).slice(0, 3)
-
-    if (!newPapers.length) {
-      return NextResponse.json({ added: 0, logs, message: '이미 수집된 논문들이에요.' })
-    }
-    logs.push(`✨ ${newPapers.length}개 신규 논문 카드 생성 중...`)
-
-    // 4. 카드 생성 + 저장
-    let added = 0
-    for (const paper of newPapers) {
-      try {
-        const card = await generateCard(paper, query)
-        const { error } = await supabase.from('cards').insert(card)
-        if (error) {
-          errors.push(`저장 실패 (${paper.title?.slice(0, 30)}): ${error.message}`)
-        } else {
-          added++
-          logs.push(`✅ 카드 생성: ${card.headline}`)
-        }
-      } catch (e: any) {
-        errors.push(`카드 생성 실패 (${paper.title?.slice(0, 30)}): ${e.message}`)
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (data: object) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
       }
-    }
 
-    return NextResponse.json({ added, logs, errors })
-  } catch (e: any) {
-    return NextResponse.json({ added: 0, logs, errors: [e.message] }, { status: 500 })
-  }
+      try {
+        // 1. 검색어 변환
+        send({ pct: 5, msg: `🔍 "${query}" 검색어 변환 중...` })
+        const searchQuery = await queryToSearchTerms(query)
+        send({ pct: 15, msg: `📌 검색어: ${searchQuery}` })
+
+        // 2. PubMed 검색
+        send({ pct: 20, msg: '📚 PubMed에서 논문 검색 중...' })
+        const papers = await searchPapersPubMed(searchQuery, 15)
+
+        if (!papers.length) {
+          send({ pct: 100, msg: '❌ 관련 논문을 찾지 못했어요. 다른 검색어를 시도해보세요.', done: true, added: 0 })
+          controller.close()
+          return
+        }
+        send({ pct: 30, msg: `✅ ${papers.length}개 논문 발견!` })
+
+        // 3. 이미 있는 카드 제외
+        const { data: existingCards } = await supabase.from('cards').select('id')
+        const existingIds = new Set((existingCards || []).map((c: any) => c.id))
+        const newPapers = papers.filter((p: any) => !existingIds.has(p.paperId)).slice(0, 5)
+
+        if (!newPapers.length) {
+          send({ pct: 100, msg: '📌 이미 수집된 논문들이에요. 다른 검색어를 시도해보세요.', done: true, added: 0 })
+          controller.close()
+          return
+        }
+        send({ pct: 35, msg: `✨ 신규 ${newPapers.length}개 논문 카드 생성 시작` })
+
+        // 4. 카드 생성
+        let added = 0
+        const errors: string[] = []
+        const pctPerCard = 60 / newPapers.length
+
+        for (let i = 0; i < newPapers.length; i++) {
+          const paper = newPapers[i]
+          const pct = Math.round(35 + pctPerCard * i)
+          send({ pct, msg: `🤖 카드 생성 중 (${i + 1}/${newPapers.length}): ${paper.title.slice(0, 40)}...` })
+
+          try {
+            const card = await generateCard(paper, query)
+            const { error } = await supabase.from('cards').insert(card)
+            if (error) {
+              errors.push(`저장 실패: ${error.message}`)
+              send({ pct: pct + Math.round(pctPerCard * 0.8), msg: `⚠️ 저장 실패: ${error.message}` })
+            } else {
+              added++
+              send({ pct: pct + Math.round(pctPerCard * 0.8), msg: `✅ 완료: ${card.headline}` })
+            }
+          } catch (e: any) {
+            errors.push(e.message)
+            send({ pct: pct + Math.round(pctPerCard * 0.8), msg: `⚠️ 오류: ${e.message?.slice(0, 50)}` })
+          }
+        }
+
+        send({ pct: 100, msg: `🎉 ${added}개 카드가 검토 대기에 추가됐어요!`, done: true, added, errors })
+      } catch (e: any) {
+        send({ pct: 100, msg: `❌ 오류: ${e.message}`, done: true, added: 0, errors: [e.message] })
+      }
+
+      controller.close()
+    }
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+    }
+  })
 }
