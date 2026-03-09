@@ -1,12 +1,24 @@
 'use client'
 import { createContext, useContext, useState, useRef, useCallback, ReactNode } from 'react'
 
+export type PaperItem = {
+  paperId: string
+  titleEn: string
+  titleKo: string
+  year: number
+  citations: number
+  evidenceLevel: string
+  doiUrl: string | null
+  status: 'pending' | 'done' | 'error' | 'skip'
+}
+
 type CollectState = {
   running: boolean
   query: string
   pct: number
   logs: string[]
   answer: string
+  papers: PaperItem[]
   done: { added: number } | null
 }
 
@@ -19,13 +31,13 @@ const CollectContext = createContext<CollectContextType | null>(null)
 
 export function CollectProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<CollectState>({
-    running: false, query: '', pct: 0, logs: [], answer: '', done: null
+    running: false, query: '', pct: 0, logs: [], answer: '', papers: [], done: null
   })
   const abortRef = useRef<AbortController | null>(null)
 
   const start = useCallback(async (query: string) => {
     if (state.running) return
-    setState({ running: true, query, pct: 0, logs: [], answer: '', done: null })
+    setState({ running: true, query, pct: 0, logs: [], answer: '', papers: [], done: null })
 
     const controller = new AbortController()
     abortRef.current = controller
@@ -54,14 +66,24 @@ export function CollectProvider({ children }: { children: ReactNode }) {
           if (!line.startsWith('data: ')) continue
           try {
             const data = JSON.parse(line.slice(6))
-            setState(prev => ({
-              ...prev,
-              pct: typeof data.pct === 'number' ? data.pct : prev.pct,
-              logs: data.msg ? [...prev.logs, data.msg] : prev.logs,
-              answer: data.answer || prev.answer,
-              done: data.done ? { added: data.added ?? 0 } : prev.done,
-              running: data.done ? false : prev.running,
-            }))
+            setState(prev => {
+              let papers = prev.papers
+              if (data.papers) papers = data.papers
+              if (data.paperStatus) {
+                papers = papers.map(p =>
+                  p.paperId === data.paperStatus.id ? { ...p, status: data.paperStatus.status } : p
+                )
+              }
+              return {
+                ...prev,
+                pct: typeof data.pct === 'number' ? data.pct : prev.pct,
+                logs: data.msg ? [...prev.logs, data.msg] : prev.logs,
+                answer: data.answer || prev.answer,
+                papers,
+                done: data.done ? { added: data.added ?? 0 } : prev.done,
+                running: data.done ? false : prev.running,
+              }
+            })
           } catch {}
         }
       }
@@ -78,7 +100,7 @@ export function CollectProvider({ children }: { children: ReactNode }) {
   }, [state.running])
 
   const clear = useCallback(() => {
-    setState({ running: false, query: '', pct: 0, logs: [], answer: '', done: null })
+    setState({ running: false, query: '', pct: 0, logs: [], answer: '', papers: [], done: null })
   }, [])
 
   return (

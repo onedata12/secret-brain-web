@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useCollect } from '@/context/CollectContext'
+import { useCollect, PaperItem } from '@/context/CollectContext'
 
 type SearchLog = {
   id: string
@@ -33,7 +33,7 @@ const EXAMPLES = [
 ]
 
 export default function CollectPage() {
-  const { running, pct, logs, answer, done, query: runningQuery, start } = useCollect()
+  const { running, pct, logs, answer, papers, done, query: runningQuery, start } = useCollect()
   const [query, setQuery] = useState('')
   const [stats, setStats] = useState({ cards: 0, pending: 0, approved: 0 })
   const [history, setHistory] = useState<SearchLog[]>([])
@@ -157,6 +157,43 @@ export default function CollectPage() {
               }`}>{l}</p>
             ))}
             {running && <p className="text-xs text-slate-300 animate-pulse">▋</p>}
+          </div>
+        </div>
+      )}
+
+      {/* 발견된 논문 목록 */}
+      {papers.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5">
+          <h2 className="font-semibold text-sm mb-3">📄 발견된 논문 ({papers.length}개)</h2>
+          <div className="space-y-2">
+            {papers.map((p: PaperItem) => (
+              <div key={p.paperId} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                p.status === 'done' ? 'bg-green-50 border-green-200'
+                : p.status === 'error' ? 'bg-red-50 border-red-100'
+                : 'bg-slate-50 border-slate-100'
+              }`}>
+                <span className="text-base shrink-0 mt-0.5">
+                  {p.status === 'done' ? '✅' : p.status === 'error' ? '⚠️' : running ? '⏳' : '📄'}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-slate-800 leading-snug">{p.titleKo}</p>
+                  <p className="text-xs text-slate-400 mt-0.5 truncate">{p.titleEn}</p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className="text-xs text-slate-500">{p.year}년</span>
+                    <span className="text-xs text-slate-400">·</span>
+                    <span className="text-xs text-slate-500">{p.evidenceLevel}</span>
+                    {p.citations > 0 && <>
+                      <span className="text-xs text-slate-400">·</span>
+                      <span className="text-xs text-slate-500">인용 {p.citations.toLocaleString()}회</span>
+                    </>}
+                    {p.doiUrl && (
+                      <a href={p.doiUrl} target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-indigo-500 hover:underline">원문 →</a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
