@@ -38,6 +38,24 @@ function getEvidenceLevel(paper: any): string {
   return '📄 일반 논문'
 }
 
+async function fetchWithRetry(url: string, retries = 3): Promise<Response> {
+  const headers: Record<string, string> = {}
+  if (process.env.SEMANTIC_SCHOLAR_API_KEY) {
+    headers['x-api-key'] = process.env.SEMANTIC_SCHOLAR_API_KEY
+  }
+
+  for (let i = 0; i < retries; i++) {
+    const res = await fetch(url, { headers })
+    if (res.status === 429) {
+      const wait = (i + 1) * 3000
+      await new Promise(r => setTimeout(r, wait))
+      continue
+    }
+    return res
+  }
+  throw new Error('Semantic Scholar API 요청 한도 초과. 잠시 후 다시 시도해주세요.')
+}
+
 export async function searchPapers(topic: string, maxResults = 20) {
   const query = topic.toLowerCase().includes('meta-analysis') || topic.toLowerCase().includes('systematic review')
     ? topic
@@ -49,7 +67,7 @@ export async function searchPapers(topic: string, maxResults = 20) {
     fields: 'title,abstract,year,authors,citationCount,externalIds,openAccessPdf,publicationTypes'
   })
 
-  const res = await fetch(`https://api.semanticscholar.org/graph/v1/paper/search?${params}`)
+  const res = await fetchWithRetry(`https://api.semanticscholar.org/graph/v1/paper/search?${params}`)
   if (!res.ok) throw new Error(`Semantic Scholar API error: ${res.status}`)
 
   const data = await res.json()
