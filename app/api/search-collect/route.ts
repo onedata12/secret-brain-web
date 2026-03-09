@@ -35,6 +35,35 @@ Query:`
   return (msg.content[0] as { text: string }).text.trim().replace(/^"|"$/g, '')
 }
 
+async function generateAnswer(query: string, papers: any[]): Promise<string> {
+  const paperSummaries = papers.slice(0, 8).map((p, i) =>
+    `[논문 ${i + 1}] ${p.title} (${p.year})\n초록: ${p.abstract?.slice(0, 300)}...`
+  ).join('\n\n')
+
+  const msg = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 800,
+    messages: [{
+      role: 'user',
+      content: `다음 논문들을 바탕으로 사용자의 질문에 친절하게 답변해줘.
+
+질문: "${query}"
+
+논문 목록:
+${paperSummaries}
+
+답변 조건:
+- 반말로 친근하게
+- 논문 근거를 바탕으로 구체적으로
+- 숫자/통계가 있으면 꼭 포함
+- 실생활에 바로 적용할 수 있는 내용으로
+- 3~5문단 분량
+- 마크다운 없이 순수 텍스트로`
+    }]
+  })
+  return (msg.content[0] as { text: string }).text.trim()
+}
+
 async function generateCard(paper: any, topic: string) {
   const prompt = `너는 복잡한 논문을 친한 친구처럼 쉽게 설명해주는 전문가야.
 
@@ -100,62 +129,64 @@ export async function POST(req: Request) {
 
       try {
         // 1. 검색어 변환
-        send({ pct: 5, msg: `🔍 "${query}" 검색어 변환 중...` })
+        send({ pct: 3, msg: `🔍 "${query}" 검색어 변환 중...` })
         const searchQuery = await queryToSearchTerms(query)
-        send({ pct: 15, msg: `📌 검색어: ${searchQuery}` })
+        send({ pct: 8, msg: `📌 검색어: ${searchQuery}` })
 
         // 2. PubMed 검색
-        send({ pct: 20, msg: '📚 PubMed에서 논문 검색 중...' })
-        const papers = await searchPapersPubMed(searchQuery, 15)
+        send({ pct: 10, msg: '📚 PubMed에서 논문 검색 중...' })
+        const papers = await searchPapersPubMed(searchQuery, 20)
 
         if (!papers.length) {
-          send({ pct: 100, msg: '❌ 관련 논문을 찾지 못했어요. 다른 검색어를 시도해보세요.', done: true, added: 0 })
+          send({ pct: 100, msg: '❌ 관련 논문을 찾지 못했어요.', done: true, added: 0, answer: '' })
           controller.close()
           return
         }
-        send({ pct: 30, msg: `✅ ${papers.length}개 논문 발견!` })
+        send({ pct: 15, msg: `✅ ${papers.length}개 논문 발견!` })
 
-        // 3. 이미 있는 카드 제외
+        // 3. 기존 카드 제외
         const { data: existingCards } = await supabase.from('cards').select('id')
         const existingIds = new Set((existingCards || []).map((c: any) => c.id))
-        const newPapers = papers.filter((p: any) => !existingIds.has(p.paperId)).slice(0, 5)
+        const newPapers = papers.filter((p: any) => !existingIds.has(p.paperId)).slice(0, 10)
 
         if (!newPapers.length) {
-          send({ pct: 100, msg: '📌 이미 수집된 논문들이에요. 다른 검색어를 시도해보세요.', done: true, added: 0 })
+          send({ pct: 100, msg: '📌 이미 수집된 논문들이에요.', done: true, added: 0, answer: '' })
           controller.close()
           return
         }
-        send({ pct: 35, msg: `✨ 신규 ${newPapers.length}개 논문 카드 생성 시작` })
+        send({ pct: 18, msg: `✨ 신규 ${newPapers.length}개 논문 카드 생성 시작` })
 
-        // 4. 카드 생성
+        // 4. 카드 생성 (10개)
         let added = 0
-        const errors: string[] = []
-        const pctPerCard = 60 / newPapers.length
+        const pctPerCard = 65 / newPapers.length
 
         for (let i = 0; i < newPapers.length; i++) {
           const paper = newPapers[i]
-          const pct = Math.round(35 + pctPerCard * i)
-          send({ pct, msg: `🤖 카드 생성 중 (${i + 1}/${newPapers.length}): ${paper.title.slice(0, 40)}...` })
+          const startPct = Math.round(18 + pctPerCard * i)
+          send({ pct: startPct, msg: `🤖 카드 생성 중 (${i + 1}/${newPapers.length}): ${paper.title.slice(0, 45)}...` })
 
           try {
             const card = await generateCard(paper, query)
             const { error } = await supabase.from('cards').insert(card)
             if (error) {
-              errors.push(`저장 실패: ${error.message}`)
-              send({ pct: pct + Math.round(pctPerCard * 0.8), msg: `⚠️ 저장 실패: ${error.message}` })
+              send({ pct: startPct + Math.round(pctPerCard * 0.9), msg: `⚠️ 저장 실패: ${error.message}` })
             } else {
               added++
-              send({ pct: pct + Math.round(pctPerCard * 0.8), msg: `✅ 완료: ${card.headline}` })
+              send({ pct: startPct + Math.round(pctPerCard * 0.9), msg: `✅ 완료 (${added}/${newPapers.length}): ${card.headline}` })
             }
           } catch (e: any) {
-            errors.push(e.message)
-            send({ pct: pct + Math.round(pctPerCard * 0.8), msg: `⚠️ 오류: ${e.message?.slice(0, 50)}` })
+            send({ pct: startPct + Math.round(pctPerCard * 0.9), msg: `⚠️ 오류: ${e.message?.slice(0, 60)}` })
           }
         }
 
-        send({ pct: 100, msg: `🎉 ${added}개 카드가 검토 대기에 추가됐어요!`, done: true, added, errors })
+        // 5. 질문 답변 생성
+        send({ pct: 88, msg: '💡 질문에 대한 답변 생성 중...' })
+        const answer = await generateAnswer(query, papers)
+        send({ pct: 95, msg: '✅ 답변 완성!' })
+
+        send({ pct: 100, msg: `🎉 ${added}개 카드 검토 대기 추가 완료!`, done: true, added, answer })
       } catch (e: any) {
-        send({ pct: 100, msg: `❌ 오류: ${e.message}`, done: true, added: 0, errors: [e.message] })
+        send({ pct: 100, msg: `❌ 오류: ${e.message}`, done: true, added: 0, answer: '' })
       }
 
       controller.close()
@@ -163,9 +194,6 @@ export async function POST(req: Request) {
   })
 
   return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-    }
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' }
   })
 }
