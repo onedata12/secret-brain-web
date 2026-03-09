@@ -12,22 +12,26 @@ async function queryToSearchTerms(query: string): Promise<string> {
     max_tokens: 150,
     messages: [{
       role: 'user',
-      content: `Convert this Korean topic/question to an optimized PubMed search query in English for finding meta-analyses and systematic reviews.
+      content: `You are helping find research papers for a Korean productivity/self-improvement tool called "시크릿 브레인" (Secret Brain - an all-in-one to-do and life management system). The goal is to find scientific evidence about human behavior, productivity, habits, and wellbeing.
 
-Korean: "${query}"
+Convert this Korean query to a PubMed search query in English. Focus on PRACTICAL human behavior research, NOT on academic/research methodology papers.
+
+Korean query: "${query}"
 
 Rules:
-- Use specific scientific English terms, include synonyms with OR
+- Focus on: productivity, habits, cognition, sleep, exercise, stress, motivation, wellbeing, behavior change
+- Use behavioral/psychological terms, NOT academic process terms
 - Always end with: meta-analysis OR "systematic review"
-- Return ONLY the query string
+- Return ONLY the query string, nothing else
 
 Examples:
-- "생산성" → "work productivity performance time management meta-analysis OR systematic review"
-- "수면" → "sleep quality cognitive performance insomnia meta-analysis OR systematic review"
-- "운동과 뇌" → "exercise physical activity cognitive function brain neuroplasticity meta-analysis OR systematic review"
-- "스트레스 줄이기" → "stress reduction psychological wellbeing burnout meta-analysis OR systematic review"
-- "습관 만들기" → "habit formation behavior change self-regulation meta-analysis OR systematic review"
-- "아침 루틴" → "morning routine circadian rhythm daily habits productivity meta-analysis OR systematic review"
+- "생산성" → "work productivity task performance time management self-regulation meta-analysis OR systematic review"
+- "수면" → "sleep quality cognitive performance memory consolidation meta-analysis OR systematic review"
+- "운동과 뇌" → "exercise physical activity cognitive function memory brain meta-analysis OR systematic review"
+- "스트레스 줄이기" → "stress reduction coping psychological wellbeing intervention meta-analysis OR systematic review"
+- "습관 만들기" → "habit formation behavior change implementation intentions meta-analysis OR systematic review"
+- "집중력" → "attention focus concentration cognitive performance intervention meta-analysis OR systematic review"
+- "동기부여" → "motivation goal setting self-efficacy achievement meta-analysis OR systematic review"
 
 Query:`
     }]
@@ -45,20 +49,22 @@ async function generateAnswer(query: string, papers: any[]): Promise<string> {
     max_tokens: 800,
     messages: [{
       role: 'user',
-      content: `다음 논문들을 바탕으로 사용자의 질문에 친절하게 답변해줘.
+      content: `너는 "시크릿 브레인" 서비스의 AI야. 시크릿 브레인은 정신없이 하루를 흘려보내는 사람들이 큰 그림을 그리고 삶을 주도적으로 살도록 돕는 올인원 할 일 관리 시스템이야.
+
+사용자가 궁금해하는 내용에 대해 논문 근거를 바탕으로 답변해줘. 시크릿 브레인 사용자가 이 인사이트를 자신의 삶에 어떻게 적용할 수 있는지 연결해줘.
 
 질문: "${query}"
 
-논문 목록:
+관련 논문들:
 ${paperSummaries}
 
 답변 조건:
-- 반말로 친근하게
-- 논문 근거를 바탕으로 구체적으로
-- 숫자/통계가 있으면 꼭 포함
-- 실생활에 바로 적용할 수 있는 내용으로
-- 3~5문단 분량
-- 마크다운 없이 순수 텍스트로`
+- 반말로 친근하게, 친한 선배처럼
+- 논문 근거 구체적으로 (숫자/통계 포함)
+- "연구에 따르면~", "메타분석 결과~" 식으로 근거 언급
+- 시크릿 브레인/할 일 관리/삶의 주도권과 연결
+- 실생활 적용법 1~3가지 포함
+- 3~4문단, 마크다운 없이 순수 텍스트`
     }]
   })
   return (msg.content[0] as { text: string }).text.trim()
@@ -81,7 +87,7 @@ async function generateCard(paper: any, topic: string) {
   "one_line": "핵심 발견을 한 문장으로 (숫자/통계 포함)",
   "easy_explanation": "친한 친구한테 설명하듯이 3~4문장으로. 반말. 비유 써도 돼.",
   "why_important": "왜 이게 중요한지 1~2문장. 일상생활과 연결해서.",
-  "secret_brain_insight": "시크릿 브레인(할 일 관리 시스템) 사용자한테 들려줄 인사이트 문구. 2~3문장. 반말. 감성적으로.",
+  "secret_brain_insight": "시크릿 브레인(정신없이 사는 사람 → 삶을 주도하는 사람으로 바꿔주는 할 일 관리 시스템) 사용자에게. 이 연구가 왜 할 일 관리/시간 주도권과 연결되는지. 2~3문장. 반말. 감성적으로.",
   "sns_copy": "SNS에 바로 쓸 수 있는 짧은 카피라이팅. 숫자 강조. 이모지 1~2개.",
   "landing_copy": "랜딩페이지에 쓸 신뢰감 있는 문구. 연구 근거 언급. 존댓말.",
   "keywords": ["키워드1", "키워드2", "키워드3"]
