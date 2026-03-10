@@ -37,12 +37,10 @@ async function generateCard(paper: any) {
   })
 
   let text = (message.content[0] as any).text.trim()
-  if (text.startsWith('```')) {
-    text = text.split('```')[1]
-    if (text.startsWith('json')) text = text.slice(4)
-  }
-
-  const cardData = JSON.parse(text)
+  text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '')
+  const match = text.match(/\{[\s\S]*\}/)
+  if (!match) throw new Error('JSON not found')
+  const cardData = JSON.parse(match[0])
   return {
     id: paper.id,
     topic: paper.search_topic,

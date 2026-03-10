@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '@/lib/supabase'
 import { searchPapersOpenAlex } from '@/lib/openalex'
 
-export const maxDuration = 300
+export const maxDuration = 60
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -48,7 +48,7 @@ async function translateTitles(papers: any[]): Promise<string[]> {
   const titles = papers.map((p, i) => `${i + 1}. ${p.title}`).join('\n')
   const msg = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 800,
+    max_tokens: 1500,
     messages: [{
       role: 'user',
       content: `다음 영어 논문 제목들을 자연스러운 한국어로 번역해줘. 학술 용어는 유지하되 읽기 쉽게.
@@ -58,7 +58,7 @@ ${titles}
 형식: 번호 없이 각 줄에 한국어 번역만. 순서 그대로.`
     }]
   })
-  const translated = (msg.content[0] as { text: string }).text.trim().split('\n').map(l => l.trim())
+  const translated = (msg.content[0] as { text: string }).text.trim().split('\n').map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean)
   return translated
 }
 
@@ -102,7 +102,7 @@ async function generateCard(paper: any, topic: string) {
 주제: ${topic}
 초록: ${paper.abstract}
 
-아래 JSON 형식으로만 응답해.
+아래 JSON 형식으로만 응답해. 반드시 유효한 JSON만 출력해. 코드블록(\`\`\`) 없이.
 
 {
   "paper_title_ko": "논문 제목을 한국어로 직역한 것 (학술적 느낌 유지)",
@@ -110,7 +110,7 @@ async function generateCard(paper: any, topic: string) {
   "one_line": "핵심 발견을 한 문장으로 (숫자/통계 포함)",
   "easy_explanation": "친한 친구한테 설명하듯이 3~4문장으로. 반말. 비유 써도 돼.",
   "why_important": "왜 이게 중요한지 1~2문장. 일상생활과 연결해서.",
-  "secret_brain_insight": "시크릿 브레인(정신없이 사는 사람 → 삶을 주도하는 사람으로 바꿔주는 할 일 관리 시스템) 사용자에게. 이 연구가 왜 할 일 관리/시간 주도권과 연결되는지. 2~3문장. 반말. 감성적으로.",
+  "secret_brain_insight": "시크릿 브레인 사용자에게. 이 연구가 왜 할 일 관리/시간 주도권과 연결되는지. 2~3문장. 반말. 감성적으로.",
   "sns_copy": "SNS에 바로 쓸 수 있는 짧은 카피라이팅. 숫자 강조. 이모지 1~2개.",
   "landing_copy": "랜딩페이지에 쓸 신뢰감 있는 문구. 연구 근거 언급. 존댓말.",
   "keywords": ["키워드1", "키워드2", "키워드3"]
@@ -118,13 +118,15 @@ async function generateCard(paper: any, topic: string) {
 
   const message = await client.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
+    max_tokens: 1200,
     messages: [{ role: 'user', content: prompt }],
   })
 
   let text = (message.content[0] as any).text.trim()
+  // 코드블록 제거
+  text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '')
   const match = text.match(/\{[\s\S]*\}/)
-  if (!match) throw new Error('JSON 파싱 실패')
+  if (!match) throw new Error('JSON not found in response')
   const cardData = JSON.parse(match[0])
 
   return {
@@ -148,13 +150,15 @@ async function generateCard(paper: any, topic: string) {
 
 export async function POST(req: Request) {
   const body = await req.json()
-  const { query, selectedPapers } = body  // selectedPapers: 미리 선택된 논문 배열
+  const { query, selectedPapers } = body
 
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     async start(controller) {
       const send = (data: object) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+        } catch {}
       }
 
       try {
@@ -162,17 +166,35 @@ export async function POST(req: Request) {
         let papers: any[] = []
 
         if (selectedPapers?.length) {
-          // 미리 선택된 논문 사용 (검색 단계 스킵)
           send({ pct: 5, msg: `📋 선택한 ${selectedPapers.length}개 논문으로 카드 생성 시작` })
           const { data: existingCards } = await supabase.from('cards').select('id')
           const existingIds = new Set((existingCards || []).map((c: any) => c.id))
+
+          // selectedPapers에서 _raw가 있으면 사용, 없으면 직접 사용
           newPapers = selectedPapers
             .filter((p: any) => !existingIds.has(p.paperId))
-            .map((p: any) => ({ ...p._raw, paperId: p.paperId, titleKo: p.titleKo }))
+            .map((p: any) => ({
+              ...(p._raw || {}),
+              paperId: p.paperId,
+              title: p._raw?.title || p.titleEn || p.title,
+              abstract: p._raw?.abstract || p.abstract || '',
+              year: p._raw?.year || p.year,
+              citationCount: p._raw?.citationCount || p.citations || 0,
+              evidenceLevel: p._raw?.evidenceLevel || p.evidenceLevel || '📄 일반 논문',
+              doiUrl: p._raw?.doiUrl || p.doiUrl || null,
+              pdfUrl: p._raw?.pdfUrl || null,
+              authors: p._raw?.authors || p.authors || [],
+              titleKo: p.titleKo,
+            }))
           papers = newPapers
+
+          if (!newPapers.length) {
+            send({ pct: 100, msg: '📌 이미 수집된 논문들이에요.', done: true, added: 0, answer: '' })
+            controller.close()
+            return
+          }
           send({ pct: 10, msg: `✨ ${newPapers.length}개 신규 논문 처리 시작` })
         } else {
-          // 기존 전체 검색 플로우
           send({ pct: 3, msg: `🔍 "${query}" 검색어 변환 중...` })
           const searchQuery = await queryToSearchTerms(query)
           send({ pct: 8, msg: `📌 검색어: ${searchQuery}` })
@@ -209,37 +231,48 @@ export async function POST(req: Request) {
         }
         send({ pct: 28, msg: `✨ 신규 ${newPapers.length}개 논문 카드 생성 시작` })
 
-        // 5. 카드 생성
+        // 카드 생성 — 최대 5개씩 (타임아웃 방지)
+        const maxCards = Math.min(newPapers.length, 5)
         let added = 0
-        const pctPerCard = 57 / newPapers.length
-        const cardStatuses: Record<string, 'done' | 'error' | 'skip'> = {}
+        const pctPerCard = 57 / maxCards
 
-        for (let i = 0; i < newPapers.length; i++) {
+        for (let i = 0; i < maxCards; i++) {
           const paper = newPapers[i]
           const startPct = Math.round(28 + pctPerCard * i)
-          send({ pct: startPct, msg: `🤖 카드 생성 중 (${i + 1}/${newPapers.length}): ${paper.titleKo || paper.title}` })
+          send({ pct: startPct, msg: `🤖 카드 생성 중 (${i + 1}/${maxCards}): ${paper.titleKo || paper.title}` })
 
           try {
             const card = await generateCard(paper, query)
             const { error } = await supabase.from('cards').insert(card)
             if (error) {
-              cardStatuses[paper.paperId] = 'error'
-              send({ pct: startPct + Math.round(pctPerCard * 0.9), msg: `⚠️ 저장 실패: ${error.message}`, paperStatus: { id: paper.paperId, status: 'error' } })
+              // ID 충돌이면 upsert 시도
+              if (error.code === '23505') {
+                send({ pct: startPct + Math.round(pctPerCard * 0.9), msg: `⏭ 이미 존재: ${card.headline || paper.title}`, paperStatus: { id: paper.paperId, status: 'skip' } })
+              } else {
+                send({ pct: startPct + Math.round(pctPerCard * 0.9), msg: `⚠️ 저장 실패: ${error.message}`, paperStatus: { id: paper.paperId, status: 'error' } })
+              }
             } else {
               added++
-              cardStatuses[paper.paperId] = 'done'
-              send({ pct: startPct + Math.round(pctPerCard * 0.9), msg: `✅ 완료 (${added}/${newPapers.length}): ${card.headline}`, paperStatus: { id: paper.paperId, status: 'done' } })
+              send({ pct: startPct + Math.round(pctPerCard * 0.9), msg: `✅ 완료 (${added}/${maxCards}): ${card.headline}`, paperStatus: { id: paper.paperId, status: 'done' } })
             }
           } catch (e: any) {
-            cardStatuses[paper.paperId] = 'error'
-            send({ pct: startPct + Math.round(pctPerCard * 0.9), msg: `⚠️ 오류: ${e.message?.slice(0, 60)}`, paperStatus: { id: paper.paperId, status: 'error' } })
+            send({ pct: startPct + Math.round(pctPerCard * 0.9), msg: `⚠️ 오류: ${e.message?.slice(0, 80)}`, paperStatus: { id: paper.paperId, status: 'error' } })
           }
         }
 
-        // 6. 답변 생성
+        if (newPapers.length > maxCards) {
+          send({ pct: 86, msg: `ℹ️ 타임아웃 방지를 위해 ${maxCards}개만 생성했어요. 나머지는 다시 검색해서 추가할 수 있어요.` })
+        }
+
+        // 답변 생성
         send({ pct: 88, msg: '💡 질문에 대한 답변 생성 중...' })
-        const answer = await generateAnswer(query, papers)
-        send({ pct: 95, msg: '✅ 답변 완성!' })
+        let answer = ''
+        try {
+          answer = await generateAnswer(query, papers)
+          send({ pct: 95, msg: '✅ 답변 완성!' })
+        } catch {
+          send({ pct: 95, msg: '⚠️ 답변 생성 스킵' })
+        }
 
         send({ pct: 100, msg: `🎉 ${added}개 카드 검토 대기 추가 완료!`, done: true, added, answer })
       } catch (e: any) {

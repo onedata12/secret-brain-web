@@ -87,6 +87,8 @@ export default function CardView({ card, showActions = true, showDelete = false,
 
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const chatContainerRef = useRef<HTMLDivElement>(null)
+  const [showDeepScrollBtn, setShowDeepScrollBtn] = useState(false)
+  const deepContainerRef = useRef<HTMLDivElement>(null)
 
   // 스크롤 위치 감지 — 맨 아래가 아니면 ↓ 버튼 표시
   const handleChatScroll = () => {
@@ -223,8 +225,8 @@ export default function CardView({ card, showActions = true, showDelete = false,
           {card.paper_title && (
             <p className="text-xs text-slate-500 mt-0.5 leading-snug">{card.paper_title}</p>
           )}
-          {(card.paper_title_ko || card.headline) && card.paper_title && (
-            <p className="text-xs text-slate-400 mt-0.5 leading-snug">{card.paper_title_ko || card.headline}</p>
+          {card.paper_title_ko && card.paper_title_ko !== card.headline && (
+            <p className="text-xs text-slate-400 mt-0.5 leading-snug">{card.paper_title_ko}</p>
           )}
           <p className="text-xs text-slate-400 mt-1">
             {card.evidence_level} · 📌 {card.topic} · {card.year}년 · 인용 {card.citations}회
@@ -350,17 +352,29 @@ export default function CardView({ card, showActions = true, showDelete = false,
         if ((e.target as HTMLDetailsElement).open) loadDeepAnalysis()
       }}>
         <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-800 font-medium">🎓 깊이 공부하기</summary>
-        <div className="mt-3">
+        <div className="mt-3 relative">
           {deepLoading && !deepAnalysis && (
             <p className="text-sm text-slate-400">분석 중...</p>
           )}
           {deepAnalysis && (
-            <div className="prose prose-sm max-w-none text-slate-700 text-sm leading-relaxed">
+            <div ref={deepContainerRef}
+              onScroll={() => {
+                const el = deepContainerRef.current
+                if (!el) return
+                setShowDeepScrollBtn(el.scrollHeight - el.scrollTop - el.clientHeight > 60)
+              }}
+              className="prose prose-sm max-w-none text-slate-700 text-sm leading-relaxed max-h-[500px] overflow-y-auto">
               <ReactMarkdown components={mdComponents}>{deepAnalysis}</ReactMarkdown>
               {deepLoading && (
                 <span className="inline-block w-1.5 h-4 bg-slate-400 animate-pulse ml-0.5 align-middle rounded" />
               )}
             </div>
+          )}
+          {showDeepScrollBtn && (
+            <button onClick={() => deepContainerRef.current?.scrollTo({ top: deepContainerRef.current.scrollHeight, behavior: 'smooth' })}
+              className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-white border border-slate-200 shadow-md rounded-full w-8 h-8 flex items-center justify-center text-slate-500 active:bg-slate-50 transition-all z-10 touch-manipulation">
+              ↓
+            </button>
           )}
         </div>
       </details>
