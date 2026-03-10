@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import ReactMarkdown from 'react-markdown'
 import type { Card } from '@/lib/supabase'
 
 function getDueCards(cards: Card[]) {
@@ -26,6 +27,7 @@ export default function StudyPage() {
   const [feynmanMessages, setFeynmanMessages] = useState<{ role: string; content: string }[]>([])
   const [feynmanInput, setFeynmanInput] = useState('')
   const [feynmanLoading, setFeynmanLoading] = useState(false)
+  const feynmanBottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetch('/api/cards?status=approved').then(r => r.json()).then(data => {
@@ -33,6 +35,11 @@ export default function StudyPage() {
       if (data.length > 0) setFeynmanCard(data[0])
     })
   }, [])
+
+  // 채팅 메시지 추가될 때마다 스크롤 아래로
+  useEffect(() => {
+    feynmanBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [feynmanMessages])
 
   const dueCards = getDueCards(cards)
 
@@ -48,19 +55,30 @@ export default function StudyPage() {
   }
 
   const sendFeynman = async () => {
-    if (!feynmanInput.trim() || !feynmanCard) return
-    const newMessages = [...feynmanMessages, { role: 'user', content: feynmanInput }]
-    setFeynmanMessages(newMessages)
+    if (!feynmanInput.trim() || !feynmanCard || feynmanLoading) return
+    const message = feynmanInput
+    const newMessages = [...feynmanMessages, { role: 'user', content: message }]
+    setFeynmanMessages([...newMessages, { role: 'assistant', content: '' }])
     setFeynmanInput('')
     setFeynmanLoading(true)
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: 'feynman', card: feynmanCard, messages: feynmanMessages, userMessage: feynmanInput })
-    })
-    const data = await res.json()
-    setFeynmanMessages([...newMessages, { role: 'assistant', content: data.answer }])
-    setFeynmanLoading(false)
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'feynman', card: feynmanCard, messages: feynmanMessages, userMessage: message })
+      })
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let answer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        answer += decoder.decode(value, { stream: true })
+        setFeynmanMessages([...newMessages, { role: 'assistant', content: answer }])
+      }
+    } finally {
+      setFeynmanLoading(false)
+    }
   }
 
   const startFeynman = () => {
@@ -152,30 +170,53 @@ export default function StudyPage() {
               </select>
 
               <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
-                <div className="space-y-2 max-h-96 overflow-y-auto">
+                <div className="space-y-2 max-h-[400px] overflow-y-auto px-1">
                   {feynmanMessages.map((m, i) => (
-                    <div key={i} className={`text-sm p-3 rounded-lg ${m.role === 'user' ? 'bg-indigo-900/40 ml-8' : 'bg-slate-100 mr-8'}`}>
-                      <p className="text-slate-700 whitespace-pre-wrap">{m.content}</p>
+                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] text-sm px-3 py-2 rounded-2xl ${
+                        m.role === 'user'
+                          ? 'bg-indigo-600 text-white rounded-tr-sm'
+                          : 'bg-slate-100 text-slate-800 rounded-tl-sm'
+                      }`}>
+                        {m.role === 'assistant' ? (
+                          <div className="prose prose-sm max-w-none">
+                            <ReactMarkdown>{m.content}</ReactMarkdown>
+                            {feynmanLoading && i === feynmanMessages.length - 1 && m.content === '' && (
+                              <span className="inline-flex gap-1">
+                                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                              </span>
+                            )}
+                            {feynmanLoading && i === feynmanMessages.length - 1 && m.content !== '' && (
+                              <span className="inline-block w-1.5 h-3.5 bg-slate-400 animate-pulse ml-0.5 align-middle rounded" />
+                            )}
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap">{m.content}</p>
+                        )}
+                      </div>
                     </div>
                   ))}
-                  {feynmanLoading && <p className="text-sm text-slate-500">생각 중...</p>}
+                  <div ref={feynmanBottomRef} />
                 </div>
 
                 {feynmanMessages.length === 0 ? (
                   <button onClick={startFeynman}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-slate-900 text-sm py-2 rounded-lg">
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-2 rounded-lg">
                     🎓 파인만 모드 시작
                   </button>
                 ) : (
                   <div className="flex gap-2">
                     <input value={feynmanInput} onChange={e => setFeynmanInput(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && sendFeynman()}
+                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendFeynman()}
                       placeholder="설명해봐!"
-                      className="flex-1 bg-slate-100 text-sm text-slate-700 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
-                    <button onClick={sendFeynman}
-                      className="bg-indigo-600 text-slate-900 text-sm px-3 py-2 rounded-lg hover:bg-indigo-700">전송</button>
+                      disabled={feynmanLoading}
+                      className="flex-1 bg-slate-50 border border-slate-200 text-sm text-slate-700 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-60" />
+                    <button onClick={sendFeynman} disabled={feynmanLoading || !feynmanInput.trim()}
+                      className="bg-indigo-600 text-white text-sm px-4 py-2.5 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors">전송</button>
                     <button onClick={() => setFeynmanMessages([])}
-                      className="bg-gray-700 text-slate-600 text-sm px-3 py-2 rounded-lg hover:bg-slate-300">🔄</button>
+                      className="bg-slate-100 text-slate-600 text-sm px-3 py-2.5 rounded-xl hover:bg-slate-200 transition-colors">🔄</button>
                   </div>
                 )}
               </div>
