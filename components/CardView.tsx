@@ -87,7 +87,6 @@ export default function CardView({ card, showActions = true, showDelete = false,
 
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const chatContainerRef = useRef<HTMLDivElement>(null)
-  const detailsRef = useRef<HTMLDetailsElement>(null)
 
   // 스크롤 위치 감지 — 맨 아래가 아니면 ↓ 버튼 표시
   const handleChatScroll = () => {
@@ -398,11 +397,7 @@ export default function CardView({ card, showActions = true, showDelete = false,
       )}
 
       {/* Q&A 채팅 — 스트리밍 + ChatGPT 스타일 */}
-      <details ref={detailsRef} className="border-t border-slate-100 pt-3" onToggle={e => {
-        if ((e.target as HTMLDetailsElement).open) {
-          setTimeout(() => detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
-        }
-      }}>
+      <details className="border-t border-slate-100 pt-3">
         <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-800 font-medium">💬 논문에 대해 질문하기</summary>
         <div className="mt-3 space-y-3">
           {/* 예시 질문 */}

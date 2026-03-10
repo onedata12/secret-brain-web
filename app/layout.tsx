@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.className} bg-slate-50 text-slate-900 min-h-screen`}>
         <CollectProvider>
           <Sidebar />
-          <main className="md:ml-60 p-4 md:p-6 pt-16 md:pt-6 min-h-screen">
+          <main className="md:ml-60 p-4 md:p-6 pt-14 md:pt-6 pb-20 md:pb-6 min-h-screen">
             {children}
           </main>
           <CollectProgress />

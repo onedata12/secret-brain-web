@@ -41,9 +41,11 @@ export function CollectProvider({ children }: { children: ReactNode }) {
     running: false, query: '', pct: 0, logs: [], answer: '', papers: [], done: null
   })
   const abortRef = useRef<AbortController | null>(null)
+  const runningRef = useRef(false)
 
   const start = useCallback(async (query: string, selectedPapers?: PaperItem[]) => {
-    if (state.running) return
+    if (runningRef.current) return
+    runningRef.current = true
     setState({ running: true, query, pct: 0, logs: [], answer: '', papers: selectedPapers || [], done: null })
 
     const controller = new AbortController()
@@ -111,11 +113,14 @@ export function CollectProvider({ children }: { children: ReactNode }) {
           logs: [...prev.logs, `❌ 오류: ${e.message}`],
         }))
       }
+    } finally {
+      runningRef.current = false
     }
-  }, [state.running])
+  }, [])
 
   const abort = useCallback(() => {
     abortRef.current?.abort()
+    runningRef.current = false
   }, [])
 
   const clear = useCallback(() => {

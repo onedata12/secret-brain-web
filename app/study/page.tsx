@@ -27,7 +27,8 @@ export default function StudyPage() {
   const [feynmanMessages, setFeynmanMessages] = useState<{ role: string; content: string }[]>([])
   const [feynmanInput, setFeynmanInput] = useState('')
   const [feynmanLoading, setFeynmanLoading] = useState(false)
-  const feynmanBottomRef = useRef<HTMLDivElement>(null)
+  const [showScrollBtn, setShowScrollBtn] = useState(false)
+  const chatContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetch('/api/cards?status=approved').then(r => r.json()).then(data => {
@@ -36,10 +37,15 @@ export default function StudyPage() {
     })
   }, [])
 
-  // 채팅 메시지 추가될 때마다 스크롤 아래로
-  useEffect(() => {
-    feynmanBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [feynmanMessages])
+  const handleChatScroll = () => {
+    const el = chatContainerRef.current
+    if (!el) return
+    setShowScrollBtn(el.scrollHeight - el.scrollTop - el.clientHeight > 60)
+  }
+
+  const scrollToBottom = () => {
+    chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })
+  }
 
   const dueCards = getDueCards(cards)
 
@@ -70,12 +76,17 @@ export default function StudyPage() {
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let answer = ''
+      let rafId = 0
+      let pending = false
+      const flush = () => { setFeynmanMessages([...newMessages, { role: 'assistant', content: answer }]); pending = false }
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         answer += decoder.decode(value, { stream: true })
-        setFeynmanMessages([...newMessages, { role: 'assistant', content: answer }])
+        if (!pending) { pending = true; rafId = requestAnimationFrame(flush) }
       }
+      cancelAnimationFrame(rafId)
+      setFeynmanMessages([...newMessages, { role: 'assistant', content: answer }])
     } finally {
       setFeynmanLoading(false)
     }
@@ -90,13 +101,13 @@ export default function StudyPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">🧠 복습 & 파인만 모드</h1>
+      <h1 className="text-xl font-bold mb-4">🧠 복습 & 파인만 모드</h1>
 
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-2 mb-5">
         {(['review', 'feynman'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-              tab === t ? 'bg-indigo-600 text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            className={`px-4 py-2.5 text-sm rounded-xl transition-colors font-medium touch-manipulation ${
+              tab === t ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 active:bg-slate-200'
             }`}>
             {t === 'review' ? '🔔 복습 알림' : '🎓 파인만 모드'}
           </button>
@@ -106,42 +117,42 @@ export default function StudyPage() {
       {tab === 'review' && (
         <div>
           {dueCards.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
-              <p className="text-green-400 font-medium">✅ 오늘 복습할 카드가 없어!</p>
-              <p className="text-slate-500 text-sm mt-1">총 {cards.length}개 카드 관리 중</p>
+            <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center">
+              <p className="text-green-600 font-medium">✅ 오늘 복습할 카드가 없어!</p>
+              <p className="text-slate-400 text-sm mt-1">총 {cards.length}개 카드 관리 중</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              <p className="text-indigo-300">🔔 {dueCards.length}개 복습할 카드가 있어!</p>
+            <div className="space-y-3">
+              <p className="text-indigo-600 text-sm font-medium">🔔 {dueCards.length}개 복습할 카드가 있어!</p>
               {dueCards.map(card => (
-                <div key={card.id} className="bg-white border border-slate-200 rounded-xl p-5">
+                <div key={card.id} className="bg-white border border-slate-200 rounded-2xl p-4">
                   <p className="font-bold text-slate-900">{card.headline}</p>
-                  <p className="text-xs text-slate-500 mt-1">{card.evidence_level} · {card.topic} · 복습 {(card.review_log || []).length}회차</p>
+                  <p className="text-xs text-slate-400 mt-1">{card.evidence_level} · {card.topic} · 복습 {(card.review_log || []).length}회차</p>
 
                   {!recallState[card.id] ? (
                     <div className="mt-4 space-y-3">
-                      <p className="text-sm text-slate-600">이 논문에서 배운 거 뭐였지? 먼저 떠올려봐 👇</p>
+                      <p className="text-sm text-slate-500">이 논문에서 배운 거 뭐였지? 먼저 떠올려봐 👇</p>
                       <textarea
                         placeholder="기억나는 대로 써봐 (틀려도 괜찮아)"
-                        className="w-full bg-slate-100 text-sm text-slate-700 rounded-lg p-3 outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
+                        className="w-full bg-slate-50 border border-slate-200 text-sm text-slate-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
                         rows={3}
                         onChange={e => setRecallState(prev => ({ ...prev, [`draft_${card.id}`]: e.target.value }))}
                       />
                       <div className="flex gap-2">
                         <button onClick={() => setRecallState(prev => ({ ...prev, [card.id]: prev[`draft_${card.id}`] || '(비워둠)' }))}
-                          className="bg-indigo-600 text-slate-900 text-sm px-4 py-2 rounded-lg hover:bg-indigo-700">확인하기</button>
+                          className="bg-indigo-600 text-white text-sm px-4 py-2.5 rounded-xl active:bg-indigo-700 font-medium touch-manipulation">확인하기</button>
                         <button onClick={() => setRecallState(prev => ({ ...prev, [card.id]: '(스킵)' }))}
-                          className="bg-gray-700 text-slate-600 text-sm px-4 py-2 rounded-lg hover:bg-slate-300">바로 정답 보기</button>
+                          className="bg-slate-100 text-slate-600 text-sm px-4 py-2.5 rounded-xl active:bg-slate-200 touch-manipulation">바로 정답 보기</button>
                       </div>
                     </div>
                   ) : (
                     <div className="mt-4 space-y-3">
-                      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
-                        <p className="text-sm font-medium">💡 {card.one_line}</p>
+                      <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3">
+                        <p className="text-sm font-medium text-indigo-900">💡 {card.one_line}</p>
                       </div>
                       <p className="text-sm text-slate-600">{card.easy_explanation}</p>
                       <button onClick={() => markReviewed(card)}
-                        className="bg-green-700 hover:bg-green-600 text-slate-900 text-sm px-4 py-2 rounded-lg">
+                        className="bg-green-600 active:bg-green-700 text-white text-sm px-4 py-2.5 rounded-xl font-medium touch-manipulation">
                         ✅ 복습 완료
                       </button>
                     </div>
@@ -155,55 +166,63 @@ export default function StudyPage() {
 
       {tab === 'feynman' && (
         <div>
-          <p className="text-slate-500 text-sm mb-4">Claude가 완전히 모르는 척하고 질문을 던져. 설명하다 막히는 부분 = 아직 모르는 부분이야.</p>
+          <p className="text-slate-400 text-sm mb-4">Claude가 완전히 모르는 척하고 질문을 던져. 설명하다 막히는 부분 = 아직 모르는 부분이야.</p>
 
-          {cards.length === 0 ? <p className="text-slate-500">승인된 카드가 없어요.</p> : (
+          {cards.length === 0 ? <p className="text-slate-400">승인된 카드가 없어요.</p> : (
             <div className="space-y-4">
               <select value={feynmanCard?.id || ''} onChange={e => {
                 const card = cards.find(c => c.id === e.target.value)
                 setFeynmanCard(card || null)
                 setFeynmanMessages([])
-              }} className="bg-slate-100 text-slate-700 text-sm px-3 py-2 rounded-lg outline-none">
+              }} className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm px-3 py-2.5 rounded-xl outline-none focus:ring-2 focus:ring-indigo-300">
                 {cards.map(c => (
                   <option key={c.id} value={c.id}>{c.headline} ({c.topic})</option>
                 ))}
               </select>
 
-              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
-                <div className="space-y-2 max-h-[400px] overflow-y-auto px-1">
-                  {feynmanMessages.map((m, i) => (
-                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[85%] text-sm px-3 py-2 rounded-2xl ${
-                        m.role === 'user'
-                          ? 'bg-indigo-600 text-white rounded-tr-sm'
-                          : 'bg-slate-100 text-slate-800 rounded-tl-sm'
-                      }`}>
-                        {m.role === 'assistant' ? (
-                          <div className="prose prose-sm max-w-none">
-                            <ReactMarkdown>{m.content}</ReactMarkdown>
-                            {feynmanLoading && i === feynmanMessages.length - 1 && m.content === '' && (
-                              <span className="inline-flex gap-1">
-                                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                              </span>
-                            )}
-                            {feynmanLoading && i === feynmanMessages.length - 1 && m.content !== '' && (
-                              <span className="inline-block w-1.5 h-3.5 bg-slate-400 animate-pulse ml-0.5 align-middle rounded" />
-                            )}
-                          </div>
-                        ) : (
-                          <p className="whitespace-pre-wrap">{m.content}</p>
-                        )}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+                <div className="relative">
+                  <div ref={chatContainerRef} onScroll={handleChatScroll}
+                    className="space-y-2 max-h-[400px] overflow-y-auto px-1">
+                    {feynmanMessages.map((m, i) => (
+                      <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] text-sm px-3 py-2 rounded-2xl ${
+                          m.role === 'user'
+                            ? 'bg-indigo-600 text-white rounded-tr-sm'
+                            : 'bg-slate-100 text-slate-800 rounded-tl-sm'
+                        }`}>
+                          {m.role === 'assistant' ? (
+                            <div className="prose prose-sm max-w-none">
+                              <ReactMarkdown>{m.content}</ReactMarkdown>
+                              {feynmanLoading && i === feynmanMessages.length - 1 && m.content === '' && (
+                                <span className="inline-flex gap-1">
+                                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                </span>
+                              )}
+                              {feynmanLoading && i === feynmanMessages.length - 1 && m.content !== '' && (
+                                <span className="inline-block w-1.5 h-3.5 bg-slate-400 animate-pulse ml-0.5 align-middle rounded" />
+                              )}
+                            </div>
+                          ) : (
+                            <p className="whitespace-pre-wrap">{m.content}</p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  <div ref={feynmanBottomRef} />
+                    ))}
+                  </div>
+                  {showScrollBtn && (
+                    <button onClick={scrollToBottom}
+                      className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-white border border-slate-200 shadow-md rounded-full w-8 h-8 flex items-center justify-center text-slate-500 active:bg-slate-50 transition-all z-10 touch-manipulation">
+                      ↓
+                    </button>
+                  )}
                 </div>
 
                 {feynmanMessages.length === 0 ? (
                   <button onClick={startFeynman}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-2 rounded-lg">
+                    className="w-full bg-indigo-600 active:bg-indigo-700 text-white text-sm py-3 rounded-xl font-medium touch-manipulation">
                     🎓 파인만 모드 시작
                   </button>
                 ) : (
@@ -214,9 +233,9 @@ export default function StudyPage() {
                       disabled={feynmanLoading}
                       className="flex-1 bg-slate-50 border border-slate-200 text-sm text-slate-700 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-60" />
                     <button onClick={sendFeynman} disabled={feynmanLoading || !feynmanInput.trim()}
-                      className="bg-indigo-600 text-white text-sm px-4 py-2.5 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors">전송</button>
+                      className="bg-indigo-600 text-white text-sm px-4 py-2.5 rounded-xl active:bg-indigo-700 disabled:opacity-50 transition-colors touch-manipulation">전송</button>
                     <button onClick={() => setFeynmanMessages([])}
-                      className="bg-slate-100 text-slate-600 text-sm px-3 py-2.5 rounded-xl hover:bg-slate-200 transition-colors">🔄</button>
+                      className="bg-slate-100 text-slate-500 text-sm px-3 py-2.5 rounded-xl active:bg-slate-200 transition-colors touch-manipulation">🔄</button>
                   </div>
                 )}
               </div>

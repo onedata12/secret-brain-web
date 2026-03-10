@@ -102,23 +102,23 @@ export default function CollectPage() {
       </div>
 
       {/* 검색창 */}
-      <div className="bg-white border border-slate-200 rounded-xl p-5">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5">
         <label className="text-sm font-medium text-slate-700 mb-2 block">뭐가 궁금해?</label>
         <div className="flex gap-2">
           <input value={query} onChange={e => setQuery(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
             disabled={searching || running}
             placeholder="예: 운동하면 뇌가 좋아진다는 게 사실이야?"
-            className="flex-1 bg-slate-50 border border-slate-200 text-sm text-slate-800 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-60" />
+            className="flex-1 bg-slate-50 border border-slate-200 text-sm text-slate-800 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-60" />
           <button onClick={handleSearch} disabled={searching || running || !query.trim()}
-            className="shrink-0 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors">
+            className="shrink-0 bg-indigo-600 active:bg-indigo-700 disabled:opacity-50 text-white px-5 py-3 rounded-xl text-sm font-medium transition-colors touch-manipulation">
             {searching ? '검색 중...' : '논문 찾기'}
           </button>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5">
           {EXAMPLES.map(e => (
             <button key={e} onClick={() => setQuery(e)} disabled={searching || running}
-              className="text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 px-2.5 py-1 rounded-full transition-colors disabled:opacity-40">
+              className="text-xs bg-slate-50 active:bg-indigo-50 active:text-indigo-700 text-slate-500 px-3 py-1.5 rounded-full transition-colors disabled:opacity-40 border border-slate-100">
               {e}
             </button>
           ))}
@@ -197,8 +197,9 @@ export default function CollectPage() {
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-slate-700">{running ? '카드 생성 중...' : '완료'}</p>
             {running && (
-              <button onClick={abort} className="text-xs bg-red-50 text-red-500 hover:bg-red-100 border border-red-200 px-2.5 py-1 rounded-lg">
-                ⏹ 중단
+              <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); abort() }}
+                className="text-xs bg-red-500 text-white active:bg-red-600 px-3 py-1.5 rounded-lg font-medium min-w-[60px] touch-manipulation">
+                중단
               </button>
             )}
           </div>
