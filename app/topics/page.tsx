@@ -26,13 +26,14 @@ export default function TopicsPage() {
   useEffect(() => { load() }, [])
 
   const add = async () => {
-    if (!name || !query) return
+    if (!name) return
+    const autoQuery = query.trim() || `${name} meta-analysis`
     setLoading(true)
     setError('')
     const res = await fetch('/api/topics', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, query, active: true })
+      body: JSON.stringify({ name, query: autoQuery, active: true })
     })
     const data = await res.json()
     if (!res.ok || data.error) {
@@ -107,13 +108,13 @@ export default function TopicsPage() {
             </div>
           </div>
           <div>
-            <label className="text-xs text-slate-500 mb-1 block">검색 쿼리 (영어)</label>
+            <label className="text-xs text-slate-500 mb-1 block">검색 쿼리 (영어, 선택사항)</label>
             <input value={query} onChange={e => setQuery(e.target.value)}
-              placeholder="예: sleep cognitive performance meta-analysis"
+              placeholder="비워두면 자동 생성 — 예: sleep cognitive performance meta-analysis"
               className="w-full bg-slate-100 text-sm text-slate-700 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500" />
           </div>
           {error && <p className="text-xs text-red-500">⚠️ {error}</p>}
-          <button onClick={add} disabled={loading || !name || !query}
+          <button onClick={add} disabled={loading || !name}
             className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition-colors">
             {loading ? '추가 중...' : '+ 추가하기'}
           </button>

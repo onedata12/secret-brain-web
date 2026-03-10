@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import type { Card } from '@/lib/supabase'
 
@@ -26,14 +26,47 @@ function getTrustInfo(card: Card) {
   return { stars, label, desc }
 }
 
+// 마크다운 컴포넌트 (모바일 최적화 + 테이블 스크롤)
+const mdComponents = {
+  h1: ({ children }: any) => <p className="font-bold text-slate-800 mt-3 mb-1">{children}</p>,
+  h2: ({ children }: any) => <p className="font-bold text-slate-800 mt-3 mb-1">{children}</p>,
+  h3: ({ children }: any) => <p className="font-semibold text-slate-700 mt-2 mb-1">{children}</p>,
+  hr: () => <hr className="border-t border-slate-200 my-3" />,
+  table: ({ children }: any) => (
+    <div className="overflow-x-auto my-2 rounded border border-slate-200">
+      <table className="text-xs border-collapse w-full min-w-[300px]">{children}</table>
+    </div>
+  ),
+  th: ({ children }: any) => <th className="border border-slate-200 px-2 py-1.5 bg-slate-100 font-semibold text-left whitespace-nowrap">{children}</th>,
+  td: ({ children }: any) => <td className="border border-slate-200 px-2 py-1.5 whitespace-nowrap">{children}</td>,
+  p: ({ children }: any) => <p className="mb-2 leading-relaxed">{children}</p>,
+  strong: ({ children }: any) => <strong className="font-semibold text-slate-900">{children}</strong>,
+  li: ({ children }: any) => <li className="mb-1">{children}</li>,
+}
+
+// 채팅 메시지 마크다운 (헤더 없이)
+const chatMdComponents = {
+  p: ({ children }: any) => <p className="mb-1 leading-relaxed last:mb-0">{children}</p>,
+  strong: ({ children }: any) => <strong className="font-semibold">{children}</strong>,
+  li: ({ children }: any) => <li className="mb-0.5">{children}</li>,
+  table: ({ children }: any) => (
+    <div className="overflow-x-auto my-1">
+      <table className="text-xs border-collapse">{children}</table>
+    </div>
+  ),
+  th: ({ children }: any) => <th className="border border-current px-2 py-1 font-semibold">{children}</th>,
+  td: ({ children }: any) => <td className="border border-current px-2 py-1">{children}</td>,
+}
+
 type Props = {
   card: Card
   showActions?: boolean
+  showDelete?: boolean
   onApprove?: (id: string) => void
   onDelete?: (id: string) => void
 }
 
-export default function CardView({ card, showActions = true, onApprove, onDelete }: Props) {
+export default function CardView({ card, showActions = true, showDelete = false, onApprove, onDelete }: Props) {
   const [tab, setTab] = useState<'explain' | 'sns' | 'landing'>('explain')
   const [chatMessages, setChatMessages] = useState<{ role: string; content: string }[]>([])
   const [chatInput, setChatInput] = useState('')
@@ -48,8 +81,14 @@ export default function CardView({ card, showActions = true, onApprove, onDelete
   const [audioLoading, setAudioLoading] = useState(false)
   const [playbackRate, setPlaybackRate] = useState(1.0)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const chatBottomRef = useRef<HTMLDivElement>(null)
 
   const trust = getTrustInfo(card)
+
+  // 채팅 메시지 추가될 때마다 스크롤 아래로
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
 
   const copy = (text: string, key: string) => {
     navigator.clipboard.writeText(text)
@@ -57,33 +96,57 @@ export default function CardView({ card, showActions = true, onApprove, onDelete
     setTimeout(() => setCopied(''), 2000)
   }
 
+  // 스트리밍 채팅
   const sendChat = async (msg?: string) => {
     const message = msg || chatInput
-    if (!message.trim()) return
+    if (!message.trim() || chatLoading) return
     const newMessages = [...chatMessages, { role: 'user', content: message }]
-    setChatMessages(newMessages)
+    setChatMessages([...newMessages, { role: 'assistant', content: '' }])
     setChatInput('')
     setChatLoading(true)
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: 'qa', card, messages: chatMessages, userMessage: message })
-    })
-    const data = await res.json()
-    setChatMessages([...newMessages, { role: 'assistant', content: data.answer }])
-    setChatLoading(false)
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'qa', card, messages: chatMessages, userMessage: message })
+      })
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let answer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        answer += decoder.decode(value, { stream: true })
+        setChatMessages([...newMessages, { role: 'assistant', content: answer }])
+      }
+    } finally {
+      setChatLoading(false)
+    }
   }
 
+  // 스트리밍 깊이 공부하기
   const loadDeepAnalysis = async () => {
+    if (deepAnalysis || deepLoading) return
     setDeepLoading(true)
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: 'deep', card, messages: [], userMessage: '심층 분석 시작' })
-    })
-    const data = await res.json()
-    setDeepAnalysis(data.answer)
-    setDeepLoading(false)
+    setDeepAnalysis('')
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'deep', card, messages: [], userMessage: '심층 분석 시작' })
+      })
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let analysis = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        analysis += decoder.decode(value, { stream: true })
+        setDeepAnalysis(analysis)
+      }
+    } finally {
+      setDeepLoading(false)
+    }
   }
 
   const loadTranslation = async () => {
@@ -110,7 +173,7 @@ export default function CardView({ card, showActions = true, onApprove, onDelete
     card.landing_copy ? `마케팅 관점에서 보면. ${card.landing_copy}` : '',
     `이 연구는 ${card.year}년에 발표된 ${card.evidence_level}으로, 지금까지 ${card.citations}회 인용되었습니다.`,
     `논문 제목은 ${card.paper_title}입니다.`,
-    `이상으로 시크릿 브레인 논문 브리핑을 마칩니다. 오늘 배운 내용을 삶에 적용해보세요.`,
+    `이상으로 시크릿 브레인 논문 브리핑을 마칩니다.`,
   ].filter(Boolean).join(' ')
 
   const loadAudio = async () => {
@@ -223,26 +286,19 @@ export default function CardView({ card, showActions = true, onApprove, onDelete
           </button>
         ) : (
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <p className="text-xs text-slate-400">🎙️ Microsoft Neural 음성</p>
               <div className="flex items-center gap-1">
                 <span className="text-xs text-slate-400 mr-1">배속:</span>
                 {[0.8, 1.0, 1.25, 1.5, 2.0].map(r => (
                   <button key={r} onClick={() => changeSpeed(r)}
                     className={`text-xs px-2 py-0.5 rounded transition-colors ${
-                      playbackRate === r
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}>
-                    {r}x
-                  </button>
+                      playbackRate === r ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}>{r}x</button>
                 ))}
               </div>
             </div>
-            <audio ref={audioRef} src={audioUrl} controls
-              className="w-full h-10"
-              style={{ colorScheme: 'light' }}
-            />
+            <audio ref={audioRef} src={audioUrl} controls className="w-full h-10" style={{ colorScheme: 'light' }} />
           </div>
         )}
       </div>
@@ -266,25 +322,23 @@ export default function CardView({ card, showActions = true, onApprove, onDelete
         </div>
       </details>
 
-      {/* 심층 분석 */}
+      {/* 깊이 공부하기 — 스트리밍 */}
       <details className="border-t border-slate-100 pt-3" onToggle={e => {
-        if ((e.target as HTMLDetailsElement).open && !deepAnalysis && !deepLoading) loadDeepAnalysis()
+        if ((e.target as HTMLDetailsElement).open) loadDeepAnalysis()
       }}>
         <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-800 font-medium">🎓 깊이 공부하기</summary>
         <div className="mt-3">
-          {deepLoading ? <p className="text-sm text-slate-400">분석 중...</p>
-            : deepAnalysis ? (
-              <div className="prose prose-sm max-w-none text-slate-700">
-                <ReactMarkdown
-                  components={{
-                    hr: () => <hr className="border-t border-slate-200 my-3" />,
-                    h1: ({children}) => <h1 className="text-base font-bold mt-4 mb-1 text-slate-800">{children}</h1>,
-                    h2: ({children}) => <h2 className="text-sm font-bold mt-3 mb-1 text-slate-800">{children}</h2>,
-                    h3: ({children}) => <h3 className="text-sm font-semibold mt-2 mb-1 text-slate-700">{children}</h3>,
-                  }}
-                >{deepAnalysis}</ReactMarkdown>
-              </div>
-            ) : null}
+          {deepLoading && !deepAnalysis && (
+            <p className="text-sm text-slate-400">분석 중...</p>
+          )}
+          {deepAnalysis && (
+            <div className="prose prose-sm max-w-none text-slate-700 text-sm leading-relaxed">
+              <ReactMarkdown components={mdComponents}>{deepAnalysis}</ReactMarkdown>
+              {deepLoading && (
+                <span className="inline-block w-1.5 h-4 bg-slate-400 animate-pulse ml-0.5 align-middle rounded" />
+              )}
+            </div>
+          )}
         </div>
       </details>
 
@@ -319,38 +373,73 @@ export default function CardView({ card, showActions = true, onApprove, onDelete
         </details>
       )}
 
-      {/* Q&A 채팅 */}
+      {/* Q&A 채팅 — 스트리밍 + ChatGPT 스타일 */}
       <details className="border-t border-slate-100 pt-3">
         <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-800 font-medium">💬 논문에 대해 질문하기</summary>
-        <div className="mt-2 space-y-2">
+        <div className="mt-3 space-y-3">
+          {/* 예시 질문 */}
           {chatMessages.length === 0 && (
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1.5">
               {['이 결과가 한국인에게도 적용돼?', '샘플 수가 충분한 거야?', '반대되는 연구도 있어?', '실생활에 어떻게 적용할 수 있어?'].map(q => (
                 <button key={q} onClick={() => sendChat(q)}
-                  className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full hover:bg-slate-200">{q}</button>
+                  className="text-xs bg-slate-100 text-slate-600 px-2.5 py-1.5 rounded-full hover:bg-indigo-50 hover:text-indigo-700 transition-colors">{q}</button>
               ))}
             </div>
           )}
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {chatMessages.map((m, i) => (
-              <div key={i} className={`text-sm p-2.5 rounded-lg ${m.role === 'user' ? 'bg-indigo-50 border border-indigo-100 ml-6' : 'bg-slate-50 border border-slate-100 mr-6'}`}>
-                <p className="text-slate-700 whitespace-pre-wrap">{m.content}</p>
-              </div>
-            ))}
-            {chatLoading && <p className="text-sm text-slate-400">생각 중...</p>}
-          </div>
+
+          {/* 메시지 목록 */}
+          {chatMessages.length > 0 && (
+            <div className="space-y-2 max-h-[360px] overflow-y-auto px-1">
+              {chatMessages.map((m, i) => (
+                <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] text-sm px-3 py-2 rounded-2xl ${
+                    m.role === 'user'
+                      ? 'bg-indigo-600 text-white rounded-tr-sm'
+                      : 'bg-slate-100 text-slate-800 rounded-tl-sm'
+                  }`}>
+                    {m.role === 'assistant' ? (
+                      <div className="prose prose-sm max-w-none">
+                        <ReactMarkdown components={chatMdComponents}>{m.content}</ReactMarkdown>
+                        {chatLoading && i === chatMessages.length - 1 && m.content === '' && (
+                          <span className="inline-flex gap-1">
+                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                          </span>
+                        )}
+                        {chatLoading && i === chatMessages.length - 1 && m.content !== '' && (
+                          <span className="inline-block w-1.5 h-3.5 bg-slate-400 animate-pulse ml-0.5 align-middle rounded" />
+                        )}
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap">{m.content}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <div ref={chatBottomRef} />
+            </div>
+          )}
+
+          {/* 입력창 */}
           <div className="flex gap-2">
-            <input value={chatInput} onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && sendChat()}
+            <input
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendChat()}
               placeholder="궁금한 거 물어봐"
-              className="flex-1 bg-slate-50 border border-slate-200 text-sm text-slate-800 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-300" />
-            <button onClick={() => sendChat()}
-              className="bg-indigo-600 text-white text-sm px-3 py-2 rounded-lg hover:bg-indigo-700">전송</button>
+              disabled={chatLoading}
+              className="flex-1 bg-slate-50 border border-slate-200 text-sm text-slate-800 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-60"
+            />
+            <button onClick={() => sendChat()} disabled={chatLoading || !chatInput.trim()}
+              className="bg-indigo-600 text-white text-sm px-4 py-2.5 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors shrink-0">
+              전송
+            </button>
           </div>
         </div>
       </details>
 
-      {/* 승인/삭제 */}
+      {/* 승인/삭제 (검토 대기) */}
       {showActions && card.status === 'pending' && (
         <div className="flex gap-2 border-t border-slate-100 pt-3">
           <button onClick={() => onApprove?.(card.id)}
@@ -360,6 +449,16 @@ export default function CardView({ card, showActions = true, onApprove, onDelete
           <button onClick={() => onDelete?.(card.id)}
             className="flex-1 bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 text-sm py-2.5 rounded-lg transition-colors">
             🗑 삭제
+          </button>
+        </div>
+      )}
+
+      {/* 삭제 (승인된 카드) */}
+      {showDelete && (
+        <div className="border-t border-slate-100 pt-3">
+          <button onClick={() => onDelete?.(card.id)}
+            className="text-xs text-red-400 hover:text-red-600 transition-colors">
+            🗑 카드 삭제
           </button>
         </div>
       )}

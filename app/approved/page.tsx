@@ -8,11 +8,22 @@ export default function ApprovedPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('전체')
 
-  useEffect(() => {
+  const load = () => {
     fetch('/api/cards?status=approved')
       .then(r => r.json())
       .then(d => { setCards(d); setLoading(false) })
-  }, [])
+  }
+
+  useEffect(() => { load() }, [])
+
+  const handleDelete = async (id: string) => {
+    await fetch('/api/cards', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    })
+    setCards(prev => prev.filter(c => c.id !== id))
+  }
 
   const topics = ['전체', ...Array.from(new Set(cards.map(c => c.topic)))]
   const filtered = filter === '전체' ? cards : cards.filter(c => c.topic === filter)
@@ -36,7 +47,7 @@ export default function ApprovedPage() {
           </div>
           <div className="space-y-4">
             {filtered.map(card => (
-              <CardView key={card.id} card={card} showActions={false} />
+              <CardView key={card.id} card={card} showActions={false} showDelete={true} onDelete={handleDelete} />
             ))}
           </div>
         </>

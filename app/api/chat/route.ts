@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -10,6 +9,7 @@ export async function POST(req: Request) {
 
   if (mode === 'qa') {
     systemPrompt = `너는 아래 논문을 완전히 이해한 전문가야. 일반인 친구한테 반말로 친근하게 설명해줘. 모르는 건 모른다고 솔직하게 말해.
+마크다운 헤더(#, ##, ###) 절대 쓰지 마. 굵은 글씨(**텍스트**)와 일반 텍스트만 써.
 
 논문 제목: ${card.paper_title}
 논문 초록: ${card.abstract_text}
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
 
   } else if (mode === 'feynman') {
     systemPrompt = `너는 아무것도 모르는 호기심 많은 친구야. 상대방이 아래 논문 내용을 설명하고 있어.
-절대 정보를 먼저 알려주지 마. 오직 질문만 해.
+절대 정보를 먼저 알려주지 마. 오직 질문만 해. 마크다운 헤더(#, ##) 절대 쓰지 마.
 
 전략:
 - 설명이 명확하면: "오 그래서 그게 구체적으로 어떻게 되는 거야?"
@@ -32,16 +32,17 @@ export async function POST(req: Request) {
 
   } else if (mode === 'deep') {
     systemPrompt = `아래 논문 초록을 바탕으로 깊이 공부하고 싶은 사람을 위한 심층 분석을 해줘. 반말로, 친구한테 설명하듯이.
+마크다운 헤더(#, ##, ###) 절대 쓰지 마. 숫자 목록과 굵은 글씨(**텍스트**)만 사용해.
 
 논문: ${card.paper_title}
 초록: ${card.abstract_text}
 
 아래 항목으로 나눠서 설명해줘:
-1. **연구 배경** - 왜 이 연구를 했을까?
-2. **연구 방법** - 어떻게 연구했어?
-3. **핵심 결과** - 구체적으로 어떤 결과가 나왔어?
+1. **연구 배경** - 왜 이 연구를 했을까? 어떤 문제를 풀려고 했어?
+2. **연구 방법** - 어떻게 연구했어? (실험 방식, 대상, 기간 등)
+3. **핵심 결과** - 구체적으로 어떤 숫자/결과가 나왔어?
 4. **왜 이게 중요해?** - 이 발견이 세상에 어떤 의미야?
-5. **한계점** - 이 연구에서 아쉬운 점은?
+5. **한계점** - 이 연구에서 아쉬운 점이나 주의할 점은?
 6. **더 공부하려면** - 어떤 키워드로 찾아봐야 해?`
   }
 
@@ -50,12 +51,29 @@ export async function POST(req: Request) {
     { role: 'user', content: userMessage }
   ]
 
-  const response = await client.messages.create({
+  const stream = client.messages.stream({
     model: 'claude-sonnet-4-6',
-    max_tokens: mode === 'deep' ? 1500 : 800,
+    max_tokens: mode === 'deep' ? 2500 : 1500,
     system: systemPrompt,
     messages: allMessages,
   })
 
-  return NextResponse.json({ answer: (response.content[0] as any).text })
+  const encoder = new TextEncoder()
+
+  return new Response(
+    new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+              controller.enqueue(encoder.encode(chunk.delta.text))
+            }
+          }
+        } finally {
+          controller.close()
+        }
+      }
+    }),
+    { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+  )
 }
