@@ -9,7 +9,13 @@ export type PaperItem = {
   citations: number
   evidenceLevel: string
   doiUrl: string | null
+  recommended: boolean
+  stars: number
+  reasons: string[]
+  abstract?: string
+  authors?: string[]
   status: 'pending' | 'done' | 'error' | 'skip'
+  _raw?: any
 }
 
 type CollectState = {
@@ -23,7 +29,8 @@ type CollectState = {
 }
 
 type CollectContextType = CollectState & {
-  start: (query: string) => Promise<void>
+  start: (query: string, selectedPapers?: PaperItem[]) => Promise<void>
+  abort: () => void
   clear: () => void
 }
 
@@ -35,18 +42,21 @@ export function CollectProvider({ children }: { children: ReactNode }) {
   })
   const abortRef = useRef<AbortController | null>(null)
 
-  const start = useCallback(async (query: string) => {
+  const start = useCallback(async (query: string, selectedPapers?: PaperItem[]) => {
     if (state.running) return
-    setState({ running: true, query, pct: 0, logs: [], answer: '', papers: [], done: null })
+    setState({ running: true, query, pct: 0, logs: [], answer: '', papers: selectedPapers || [], done: null })
 
     const controller = new AbortController()
     abortRef.current = controller
 
     try {
+      const body: any = { query }
+      if (selectedPapers?.length) body.selectedPapers = selectedPapers
+
       const res = await fetch('/api/search-collect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify(body),
         signal: controller.signal,
       })
 
@@ -88,10 +98,15 @@ export function CollectProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (e: any) {
-      if (e.name !== 'AbortError') {
+      if (e.name === 'AbortError') {
         setState(prev => ({
-          ...prev,
-          running: false,
+          ...prev, running: false,
+          logs: [...prev.logs, '⏹ 수집이 중단됐어요.'],
+          done: { added: 0 },
+        }))
+      } else {
+        setState(prev => ({
+          ...prev, running: false,
           done: { added: 0 },
           logs: [...prev.logs, `❌ 오류: ${e.message}`],
         }))
@@ -99,12 +114,16 @@ export function CollectProvider({ children }: { children: ReactNode }) {
     }
   }, [state.running])
 
+  const abort = useCallback(() => {
+    abortRef.current?.abort()
+  }, [])
+
   const clear = useCallback(() => {
     setState({ running: false, query: '', pct: 0, logs: [], answer: '', papers: [], done: null })
   }, [])
 
   return (
-    <CollectContext.Provider value={{ ...state, start, clear }}>
+    <CollectContext.Provider value={{ ...state, start, abort, clear }}>
       {children}
     </CollectContext.Provider>
   )
