@@ -164,7 +164,7 @@ export default function CollectPage() {
       if (receivedPapers.length > 0) {
         setDeepLogs(prev => [...prev, '🌐 논문 제목 번역 중...'])
         try {
-          const titlesToTranslate = receivedPapers.filter((p: any) => !p.titleKo && p.titleEn).slice(0, 50)
+          const titlesToTranslate = receivedPapers.filter((p: any) => !p.titleKo && p.titleEn)
           if (titlesToTranslate.length > 0) {
             const batchSize = 25
             for (let i = 0; i < titlesToTranslate.length; i += batchSize) {

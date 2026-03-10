@@ -58,6 +58,33 @@ const chatMdComponents = {
   td: ({ children }: any) => <td className="border border-current px-2 py-1">{children}</td>,
 }
 
+// 서버 캐시 헬퍼
+async function loadCache(cardId: string, type: string) {
+  try {
+    const res = await fetch(`/api/card-cache?cardId=${encodeURIComponent(cardId)}&type=${type}`)
+    const { data } = await res.json()
+    return data
+  } catch { return null }
+}
+
+async function saveCache(cardId: string, type: string, content: any) {
+  try {
+    await fetch('/api/card-cache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cardId, type, content }),
+    })
+  } catch {}
+}
+
+// 경과 시간 포맷
+function formatElapsed(startTime: number) {
+  const elapsed = Math.round((Date.now() - startTime) / 1000)
+  if (elapsed < 5) return ''
+  if (elapsed < 60) return `${elapsed}초 경과`
+  return `${Math.floor(elapsed / 60)}분 ${elapsed % 60}초 경과`
+}
+
 type Props = {
   card: Card
   showActions?: boolean
@@ -68,16 +95,10 @@ type Props = {
 
 export default function CardView({ card, showActions = true, showDelete = false, onApprove, onDelete }: Props) {
   const [tab, setTab] = useState<'explain' | 'sns' | 'landing'>('explain')
-  const [chatMessages, setChatMessages] = useState<{ role: string; content: string }[]>(() => {
-    if (typeof window === 'undefined') return []
-    try { return JSON.parse(sessionStorage.getItem(`chat_${card.id}`) || '[]') } catch { return [] }
-  })
+  const [chatMessages, setChatMessages] = useState<{ role: string; content: string }[]>([])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
-  const [deepAnalysis, setDeepAnalysis] = useState(() => {
-    if (typeof window === 'undefined') return ''
-    return sessionStorage.getItem(`deep_${card.id}`) || ''
-  })
+  const [deepAnalysis, setDeepAnalysis] = useState('')
   const [deepLoading, setDeepLoading] = useState(false)
   const [showReader, setShowReader] = useState(false)
   const [sentences, setSentences] = useState<{ id: number; en: string; ko: string }[]>([])
@@ -88,16 +109,46 @@ export default function CardView({ card, showActions = true, showDelete = false,
   const [playbackRate, setPlaybackRate] = useState(1.0)
   const audioRef = useRef<HTMLAudioElement>(null)
 
+  // 진행률 타이머
+  const [loadStartTime, setLoadStartTime] = useState(0)
+  const [elapsed, setElapsed] = useState('')
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const startTimer = () => {
+    const start = Date.now()
+    setLoadStartTime(start)
+    setElapsed('')
+    timerRef.current = setInterval(() => {
+      setElapsed(formatElapsed(start))
+    }, 1000)
+  }
+
+  const stopTimer = () => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+    setElapsed('')
+    setLoadStartTime(0)
+  }
+
+  useEffect(() => { return () => { if (timerRef.current) clearInterval(timerRef.current) } }, [])
+
   const trust = getTrustInfo(card)
 
-  // 깊이 공부하기 & 채팅 결과 캐싱
+  // 서버에서 캐시 로드 (마운트 시)
+  const [cacheLoaded, setCacheLoaded] = useState(false)
   useEffect(() => {
-    if (deepAnalysis) sessionStorage.setItem(`deep_${card.id}`, deepAnalysis)
-  }, [deepAnalysis, card.id])
-  useEffect(() => {
-    if (chatMessages.length > 0) sessionStorage.setItem(`chat_${card.id}`, JSON.stringify(chatMessages))
-  }, [chatMessages, card.id])
-
+    if (cacheLoaded) return
+    setCacheLoaded(true)
+    // 비동기로 캐시 로드
+    Promise.all([
+      loadCache(card.id, 'deep'),
+      loadCache(card.id, 'translation'),
+      loadCache(card.id, 'chat'),
+    ]).then(([deep, translation, chat]) => {
+      if (deep) setDeepAnalysis(typeof deep === 'string' ? deep : '')
+      if (translation && Array.isArray(translation)) setSentences(translation)
+      if (chat && Array.isArray(chat)) setChatMessages(chat)
+    })
+  }, [card.id, cacheLoaded])
 
   const copy = (text: string, key: string) => {
     navigator.clipboard.writeText(text)
@@ -105,7 +156,7 @@ export default function CardView({ card, showActions = true, showDelete = false,
     setTimeout(() => setCopied(''), 2000)
   }
 
-  // 질문하기 — 전체 응답 후 한번에 표시
+  // 질문하기
   const sendChat = async (msg?: string) => {
     const message = msg || chatInput
     if (!message.trim() || chatLoading) return
@@ -113,6 +164,7 @@ export default function CardView({ card, showActions = true, showDelete = false,
     setChatMessages([...newMessages, { role: 'assistant', content: '' }])
     setChatInput('')
     setChatLoading(true)
+    startTimer()
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -127,17 +179,22 @@ export default function CardView({ card, showActions = true, showDelete = false,
         if (done) break
         answer += decoder.decode(value, { stream: true })
       }
-      setChatMessages([...newMessages, { role: 'assistant', content: answer }])
+      const finalMessages = [...newMessages, { role: 'assistant', content: answer }]
+      setChatMessages(finalMessages)
+      // 서버에 저장
+      saveCache(card.id, 'chat', finalMessages)
     } finally {
       setChatLoading(false)
+      stopTimer()
     }
   }
 
-  // 깊이 공부하기 — 전체 응답 후 한번에 표시
+  // 깊이 공부하기
   const loadDeepAnalysis = async () => {
     if (deepAnalysis || deepLoading) return
     setDeepLoading(true)
     setDeepAnalysis('')
+    startTimer()
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -153,23 +210,33 @@ export default function CardView({ card, showActions = true, showDelete = false,
         analysis += decoder.decode(value, { stream: true })
       }
       setDeepAnalysis(analysis)
+      // 서버에 저장
+      saveCache(card.id, 'deep', analysis)
     } finally {
       setDeepLoading(false)
+      stopTimer()
     }
   }
 
   const loadTranslation = async () => {
     if (sentences.length > 0) { setShowReader(true); return }
     setTranslateLoading(true)
-    const res = await fetch('/api/translate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: card.abstract_text })
-    })
-    const data = await res.json()
-    setSentences(data)
-    setShowReader(true)
-    setTranslateLoading(false)
+    startTimer()
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: card.abstract_text })
+      })
+      const data = await res.json()
+      setSentences(data)
+      setShowReader(true)
+      // 서버에 저장
+      saveCache(card.id, 'translation', data)
+    } finally {
+      setTranslateLoading(false)
+      stopTimer()
+    }
   }
 
   const loadAudio = async () => {
@@ -204,6 +271,19 @@ export default function CardView({ card, showActions = true, showDelete = false,
     setPlaybackRate(r)
     if (audioRef.current) audioRef.current.playbackRate = r
   }
+
+  // 로딩 인디케이터 컴포넌트
+  const LoadingIndicator = ({ label }: { label: string }) => (
+    <div className="flex items-center gap-2 text-sm text-slate-400 py-2">
+      <span className="inline-flex gap-1">
+        <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+        <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+        <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+      </span>
+      <span>{label}</span>
+      {elapsed && <span className="text-xs text-slate-300 ml-1">({elapsed})</span>}
+    </div>
+  )
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 md:p-5 space-y-4 shadow-sm">
@@ -333,22 +413,15 @@ export default function CardView({ card, showActions = true, showDelete = false,
         </div>
       </details>
 
-      {/* 깊이 공부하기 — 스트리밍 */}
+      {/* 깊이 공부하기 */}
       <details className="border-t border-slate-100 pt-3" onToggle={e => {
         if ((e.target as HTMLDetailsElement).open) loadDeepAnalysis()
       }}>
-        <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-800 font-medium">🎓 깊이 공부하기</summary>
+        <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-800 font-medium">
+          🎓 깊이 공부하기 {deepAnalysis && <span className="text-xs text-green-500 ml-1">✓ 분석 완료</span>}
+        </summary>
         <div className="mt-3">
-          {deepLoading && !deepAnalysis && (
-            <div className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="inline-flex gap-1">
-                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </span>
-              분석 중...
-            </div>
-          )}
+          {deepLoading && !deepAnalysis && <LoadingIndicator label="심층 분석 중... (보통 15~30초)" />}
           {deepAnalysis && (
             <div className="prose prose-sm max-w-none text-slate-700 text-sm leading-relaxed">
               <ReactMarkdown components={mdComponents}>{deepAnalysis}</ReactMarkdown>
@@ -361,11 +434,11 @@ export default function CardView({ card, showActions = true, showDelete = false,
       {card.abstract_text && (
         <details className="border-t border-slate-100 pt-3">
           <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-800 font-medium"
-            onClick={() => !showReader && loadTranslation()}>
-            📖 초록 원문 읽기 (영/한)
+            onClick={() => !showReader && sentences.length === 0 && loadTranslation()}>
+            📖 초록 원문 읽기 (영/한) {sentences.length > 0 && <span className="text-xs text-green-500 ml-1">✓ 번역 완료</span>}
           </summary>
-          {translateLoading && <p className="text-sm text-slate-400 mt-2">번역 중...</p>}
-          {showReader && sentences.length > 0 && (
+          {translateLoading && <LoadingIndicator label="번역 중... (보통 5~10초)" />}
+          {(showReader || sentences.length > 0) && sentences.length > 0 && (
             <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 max-h-80 overflow-y-auto">
               <div>
                 <p className="text-xs text-slate-400 font-bold mb-2">🇺🇸 영문</p>
@@ -388,9 +461,11 @@ export default function CardView({ card, showActions = true, showDelete = false,
         </details>
       )}
 
-      {/* Q&A 채팅 — 스트리밍 + ChatGPT 스타일 */}
+      {/* Q&A 채팅 */}
       <details className="border-t border-slate-100 pt-3">
-        <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-800 font-medium">💬 논문에 대해 질문하기</summary>
+        <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-800 font-medium">
+          💬 논문에 대해 질문하기 {chatMessages.length > 0 && <span className="text-xs text-green-500 ml-1">✓ {chatMessages.length}개 대화</span>}
+        </summary>
         <div className="mt-3 space-y-3">
           {/* 예시 질문 */}
           {chatMessages.length === 0 && (
@@ -432,6 +507,9 @@ export default function CardView({ card, showActions = true, showDelete = false,
               ))}
             </div>
           )}
+
+          {/* 로딩 */}
+          {chatLoading && <LoadingIndicator label="답변 생성 중..." />}
 
           {/* 입력창 */}
           <div className="flex gap-2">
