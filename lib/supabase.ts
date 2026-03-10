@@ -49,7 +49,6 @@ export type Card = {
   topic: string
   evidence_level: string
   paper_title: string
-  paper_title_ko?: string
   year: number
   citations: number
   authors: string[]

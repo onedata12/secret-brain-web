@@ -6,7 +6,10 @@
       "Bash(git push:*)",
       "WebFetch(domain:vercel.com)",
       "Bash(gh api:*)",
-      "Bash(npx vercel:*)"
+      "Bash(npx vercel:*)",
+      "Bash(node -e \"\nconst { searchPapersOpenAlex } = require\\('./lib/openalex'\\);\n// Test if OpenAlex works\nsearchPapersOpenAlex\\('stress reduction psychological intervention', 3\\).then\\(papers => {\n  console.log\\('Papers found:', papers.length\\);\n  if \\(papers[0]\\) {\n    console.log\\('ID format:', papers[0].paperId\\);\n    console.log\\('Title:', papers[0].title?.slice\\(0, 60\\)\\);\n    console.log\\('Year:', papers[0].year\\);\n    console.log\\('Evidence:', papers[0].evidenceLevel\\);\n  }\n}\\).catch\\(e => console.error\\('Error:', e.message\\)\\);\n\" 2>&1)",
+      "Bash(node -e \"\nasync function test\\(\\) {\n  // Test OpenAlex API directly\n  const params = new URLSearchParams\\({\n    search: 'stress reduction psychological intervention',\n    filter: 'has_abstract:true',\n    'per-page': '3',\n    select: 'id,title,publication_year,cited_by_count,doi,type',\n    mailto: 'secretbrain@research.kr',\n  }\\);\n  const res = await fetch\\('https://api.openalex.org/works?' + params\\);\n  const data = await res.json\\(\\);\n  console.log\\('Status:', res.status\\);\n  console.log\\('Count:', data.meta?.count\\);\n  console.log\\('Results:', data.results?.length\\);\n  if \\(data.results?.[0]\\) {\n    const w = data.results[0];\n    console.log\\('ID:', w.id\\);\n    console.log\\('Title:', w.title?.slice\\(0, 60\\)\\);\n    console.log\\('Year:', w.publication_year\\);\n    console.log\\('Citations:', w.cited_by_count\\);\n  }\n}\ntest\\(\\).catch\\(e => console.error\\('Error:', e\\)\\);\n\" 2>&1)",
+      "Bash(node -e \"\nasync function test\\(\\) {\n  // Test card ID format in Supabase\n  const { createClient } = require\\('@supabase/supabase-js'\\);\n  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;\n  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;\n  if \\(!url || !key\\) { console.log\\('No Supabase env vars'\\); return; }\n  const sb = createClient\\(url, key\\);\n  const { data, error } = await sb.from\\('cards'\\).select\\('id'\\).limit\\(3\\);\n  if \\(error\\) { console.log\\('Error:', error.message\\); return; }\n  console.log\\('Existing IDs:'\\);\n  data?.forEach\\(c => console.log\\(' ', c.id\\)\\);\n}\ntest\\(\\);\n\" 2>&1)"
     ]
   }
 }

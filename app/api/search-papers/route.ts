@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { searchPapersOpenAlex } from '@/lib/openalex'
+import { searchPapersOpenAlexPaged } from '@/lib/openalex'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -21,16 +21,17 @@ Query:`
 }
 
 async function translateTitles(papers: any[]): Promise<string[]> {
+  if (!papers.length) return []
   const titles = papers.map((p, i) => `${i + 1}. ${p.title}`).join('\n')
   const msg = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1500,
+    max_tokens: 2000,
     messages: [{
       role: 'user',
       content: `영어 논문 제목들을 자연스러운 한국어로 번역해줘. 학술 용어 유지. 번호 없이 각 줄에 번역만.\n\n${titles}`
     }]
   })
-  return (msg.content[0] as { text: string }).text.trim().split('\n').map(l => l.trim()).filter(Boolean)
+  return (msg.content[0] as { text: string }).text.trim().split('\n').map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean)
 }
 
 function getRecommendation(paper: any): { recommended: boolean; stars: number; reasons: string[] } {
@@ -57,13 +58,15 @@ function getRecommendation(paper: any): { recommended: boolean; stars: number; r
 }
 
 export async function POST(req: Request) {
-  const { query } = await req.json()
+  const { query, cursor, searchQuery: existingSearchQuery } = await req.json()
   if (!query?.trim()) return NextResponse.json({ error: '검색어 필요' }, { status: 400 })
 
   try {
-    const searchQuery = await queryToSearchTerms(query)
-    const papers = await searchPapersOpenAlex(searchQuery, 30)
-    if (!papers.length) return NextResponse.json({ papers: [], searchQuery })
+    // 첫 검색이면 검색어 변환, "더 불러오기"면 기존 검색어 재사용
+    const searchQuery = existingSearchQuery || await queryToSearchTerms(query)
+    const { papers, nextCursor, totalCount } = await searchPapersOpenAlexPaged(searchQuery, 30, cursor || undefined)
+
+    if (!papers.length) return NextResponse.json({ papers: [], searchQuery, nextCursor: null, totalCount })
 
     const koTitles = await translateTitles(papers)
     const result = papers.map((p: any, i: number) => {
@@ -85,7 +88,7 @@ export async function POST(req: Request) {
       }
     })
 
-    return NextResponse.json({ papers: result, searchQuery })
+    return NextResponse.json({ papers: result, searchQuery, nextCursor, totalCount })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }

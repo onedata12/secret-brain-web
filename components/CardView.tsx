@@ -225,9 +225,6 @@ export default function CardView({ card, showActions = true, showDelete = false,
           {card.paper_title && (
             <p className="text-xs text-slate-500 mt-0.5 leading-snug">{card.paper_title}</p>
           )}
-          {card.paper_title_ko && card.paper_title_ko !== card.headline && (
-            <p className="text-xs text-slate-400 mt-0.5 leading-snug">{card.paper_title_ko}</p>
-          )}
           <p className="text-xs text-slate-400 mt-1">
             {card.evidence_level} · 📌 {card.topic} · {card.year}년 · 인용 {card.citations}회
           </p>
