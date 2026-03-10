@@ -140,7 +140,7 @@ export default function CollectPage() {
             </div>
           </div>
 
-          <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
             {foundPapers.map(p => (
               <label key={p.paperId} className={`flex gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
                 selectedIds.has(p.paperId) ? 'bg-indigo-50 border-indigo-300' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'

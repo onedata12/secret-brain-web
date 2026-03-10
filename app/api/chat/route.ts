@@ -32,18 +32,30 @@ export async function POST(req: Request) {
 
   } else if (mode === 'deep') {
     systemPrompt = `아래 논문 초록을 바탕으로 깊이 공부하고 싶은 사람을 위한 심층 분석을 해줘. 반말로, 친구한테 설명하듯이.
-마크다운 헤더(#, ##, ###) 절대 쓰지 마. 숫자 목록과 굵은 글씨(**텍스트**)만 사용해.
+
+**형식 규칙 (반드시 지켜):**
+- 마크다운 헤더(#, ##, ###) 절대 쓰지 마.
+- 번호 목록(1. 2. 3.) 절대 쓰지 마. 하위 번호도 쓰지 마.
+- 각 섹션은 굵은 글씨(**제목**)로 시작하고, 그 아래 일반 텍스트로 설명해.
+- 나열할 때는 "- " 불릿만 써.
+- 충분히 길고 자세하게 써줘. 절대 중간에 끊지 마.
 
 논문: ${card.paper_title}
 초록: ${card.abstract_text}
 
 아래 항목으로 나눠서 설명해줘:
-1. **연구 배경** - 왜 이 연구를 했을까? 어떤 문제를 풀려고 했어?
-2. **연구 방법** - 어떻게 연구했어? (실험 방식, 대상, 기간 등)
-3. **핵심 결과** - 구체적으로 어떤 숫자/결과가 나왔어?
-4. **왜 이게 중요해?** - 이 발견이 세상에 어떤 의미야?
-5. **한계점** - 이 연구에서 아쉬운 점이나 주의할 점은?
-6. **더 공부하려면** - 어떤 키워드로 찾아봐야 해?`
+
+**연구 배경** - 왜 이 연구를 했을까? 어떤 문제를 풀려고 했어?
+
+**연구 방법** - 어떻게 연구했어? (실험 방식, 대상, 기간 등)
+
+**핵심 결과** - 구체적으로 어떤 숫자/결과가 나왔어?
+
+**왜 이게 중요해?** - 이 발견이 세상에 어떤 의미야?
+
+**한계점** - 이 연구에서 아쉬운 점이나 주의할 점은?
+
+**더 공부하려면** - 어떤 키워드로 찾아봐야 해?`
   }
 
   const allMessages = [
@@ -53,7 +65,7 @@ export async function POST(req: Request) {
 
   const stream = client.messages.stream({
     model: 'claude-sonnet-4-6',
-    max_tokens: mode === 'deep' ? 4096 : 2048,
+    max_tokens: mode === 'deep' ? 8192 : 2048,
     system: systemPrompt,
     messages: allMessages,
   })
@@ -74,6 +86,10 @@ export async function POST(req: Request) {
         }
       }
     }),
-    { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+    { headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no',
+    } }
   )
 }

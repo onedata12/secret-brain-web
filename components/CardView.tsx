@@ -221,10 +221,10 @@ export default function CardView({ card, showActions = true, showDelete = false,
         <div className="min-w-0">
           <h3 className="text-base md:text-lg font-bold text-slate-900">{card.headline}</h3>
           {card.paper_title && (
-            <p className="text-xs text-slate-600 mt-0.5 leading-snug font-medium">{card.paper_title}</p>
+            <p className="text-xs text-slate-500 mt-0.5 leading-snug">{card.paper_title}</p>
           )}
-          {card.paper_title_ko && (
-            <p className="text-xs text-slate-400 mt-0.5 leading-snug">{card.paper_title_ko}</p>
+          {(card.paper_title_ko || card.headline) && card.paper_title && (
+            <p className="text-xs text-slate-400 mt-0.5 leading-snug">{card.paper_title_ko || card.headline}</p>
           )}
           <p className="text-xs text-slate-400 mt-1">
             {card.evidence_level} · 📌 {card.topic} · {card.year}년 · 인용 {card.citations}회

@@ -24,7 +24,7 @@ async function translateTitles(papers: any[]): Promise<string[]> {
   const titles = papers.map((p, i) => `${i + 1}. ${p.title}`).join('\n')
   const msg = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 800,
+    max_tokens: 1500,
     messages: [{
       role: 'user',
       content: `영어 논문 제목들을 자연스러운 한국어로 번역해줘. 학술 용어 유지. 번호 없이 각 줄에 번역만.\n\n${titles}`
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
 
   try {
     const searchQuery = await queryToSearchTerms(query)
-    const papers = await searchPapersOpenAlex(searchQuery, 15)
+    const papers = await searchPapersOpenAlex(searchQuery, 30)
     if (!papers.length) return NextResponse.json({ papers: [], searchQuery })
 
     const koTitles = await translateTitles(papers)
