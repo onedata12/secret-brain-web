@@ -68,10 +68,16 @@ type Props = {
 
 export default function CardView({ card, showActions = true, showDelete = false, onApprove, onDelete }: Props) {
   const [tab, setTab] = useState<'explain' | 'sns' | 'landing'>('explain')
-  const [chatMessages, setChatMessages] = useState<{ role: string; content: string }[]>([])
+  const [chatMessages, setChatMessages] = useState<{ role: string; content: string }[]>(() => {
+    if (typeof window === 'undefined') return []
+    try { return JSON.parse(sessionStorage.getItem(`chat_${card.id}`) || '[]') } catch { return [] }
+  })
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
-  const [deepAnalysis, setDeepAnalysis] = useState('')
+  const [deepAnalysis, setDeepAnalysis] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return sessionStorage.getItem(`deep_${card.id}`) || ''
+  })
   const [deepLoading, setDeepLoading] = useState(false)
   const [showReader, setShowReader] = useState(false)
   const [sentences, setSentences] = useState<{ id: number; en: string; ko: string }[]>([])
@@ -81,26 +87,17 @@ export default function CardView({ card, showActions = true, showDelete = false,
   const [audioLoading, setAudioLoading] = useState(false)
   const [playbackRate, setPlaybackRate] = useState(1.0)
   const audioRef = useRef<HTMLAudioElement>(null)
-  const chatBottomRef = useRef<HTMLDivElement>(null)
 
   const trust = getTrustInfo(card)
 
-  const [showScrollBtn, setShowScrollBtn] = useState(false)
-  const chatContainerRef = useRef<HTMLDivElement>(null)
-  const [showDeepScrollBtn, setShowDeepScrollBtn] = useState(false)
-  const deepContainerRef = useRef<HTMLDivElement>(null)
+  // 깊이 공부하기 & 채팅 결과 캐싱
+  useEffect(() => {
+    if (deepAnalysis) sessionStorage.setItem(`deep_${card.id}`, deepAnalysis)
+  }, [deepAnalysis, card.id])
+  useEffect(() => {
+    if (chatMessages.length > 0) sessionStorage.setItem(`chat_${card.id}`, JSON.stringify(chatMessages))
+  }, [chatMessages, card.id])
 
-  // 스크롤 위치 감지 — 맨 아래가 아니면 ↓ 버튼 표시
-  const handleChatScroll = () => {
-    const el = chatContainerRef.current
-    if (!el) return
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
-    setShowScrollBtn(!atBottom)
-  }
-
-  const scrollToBottom = () => {
-    chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })
-  }
 
   const copy = (text: string, key: string) => {
     navigator.clipboard.writeText(text)
@@ -108,7 +105,7 @@ export default function CardView({ card, showActions = true, showDelete = false,
     setTimeout(() => setCopied(''), 2000)
   }
 
-  // 스트리밍 채팅
+  // 질문하기 — 전체 응답 후 한번에 표시
   const sendChat = async (msg?: string) => {
     const message = msg || chatInput
     if (!message.trim() || chatLoading) return
@@ -125,23 +122,18 @@ export default function CardView({ card, showActions = true, showDelete = false,
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let answer = ''
-      let rafId = 0
-      let pending = false
-      const flush = () => { setChatMessages([...newMessages, { role: 'assistant', content: answer }]); pending = false }
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         answer += decoder.decode(value, { stream: true })
-        if (!pending) { pending = true; rafId = requestAnimationFrame(flush) }
       }
-      cancelAnimationFrame(rafId)
       setChatMessages([...newMessages, { role: 'assistant', content: answer }])
     } finally {
       setChatLoading(false)
     }
   }
 
-  // 스트리밍 깊이 공부하기 (부드러운 렌더링)
+  // 깊이 공부하기 — 전체 응답 후 한번에 표시
   const loadDeepAnalysis = async () => {
     if (deepAnalysis || deepLoading) return
     setDeepLoading(true)
@@ -155,16 +147,11 @@ export default function CardView({ card, showActions = true, showDelete = false,
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let analysis = ''
-      let rafId = 0
-      let pending = false
-      const flush = () => { setDeepAnalysis(analysis); pending = false }
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         analysis += decoder.decode(value, { stream: true })
-        if (!pending) { pending = true; rafId = requestAnimationFrame(flush) }
       }
-      cancelAnimationFrame(rafId)
       setDeepAnalysis(analysis)
     } finally {
       setDeepLoading(false)
@@ -185,30 +172,32 @@ export default function CardView({ card, showActions = true, showDelete = false,
     setTranslateLoading(false)
   }
 
-  const audioText = [
-    `오늘의 논문 인사이트입니다.`,
-    `${card.headline}.`,
-    `핵심 한 줄 요약. ${card.one_line}.`,
-    `쉬운 설명. ${card.easy_explanation}`,
-    `왜 중요한가. ${card.why_important}`,
-    `시크릿 브레인 인사이트. ${card.secret_brain_insight}`,
-    card.landing_copy ? `마케팅 관점에서 보면. ${card.landing_copy}` : '',
-    `이 연구는 ${card.year}년에 발표된 ${card.evidence_level}으로, 지금까지 ${card.citations}회 인용되었습니다.`,
-    `논문 제목은 ${card.paper_title}입니다.`,
-    `이상으로 시크릿 브레인 논문 브리핑을 마칩니다.`,
-  ].filter(Boolean).join(' ')
-
   const loadAudio = async () => {
     if (audioUrl) return
     setAudioLoading(true)
-    const res = await fetch('/api/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: audioText })
-    })
-    const blob = await res.blob()
-    setAudioUrl(URL.createObjectURL(blob))
-    setAudioLoading(false)
+    try {
+      // 1) Claude로 15분 분량 팟캐스트 스크립트 생성
+      const scriptRes = await fetch('/api/podcast-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card })
+      })
+      const { script } = await scriptRes.json()
+      if (!script) throw new Error('스크립트 생성 실패')
+
+      // 2) TTS로 변환
+      const ttsRes = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: script })
+      })
+      const blob = await ttsRes.blob()
+      setAudioUrl(URL.createObjectURL(blob))
+    } catch (e) {
+      console.error('Audio error:', e)
+    } finally {
+      setAudioLoading(false)
+    }
   }
 
   const changeSpeed = (r: number) => {
@@ -222,8 +211,8 @@ export default function CardView({ card, showActions = true, showDelete = false,
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h3 className="text-base md:text-lg font-bold text-slate-900">{card.headline}</h3>
-          {card.paper_title && (
-            <p className="text-xs text-slate-500 mt-0.5 leading-snug">{card.paper_title}</p>
+          {(card.paper_title_ko || card.paper_title) && (
+            <p className="text-xs text-slate-500 mt-0.5 leading-snug">{card.paper_title_ko || card.paper_title}</p>
           )}
           <p className="text-xs text-slate-400 mt-1">
             {card.evidence_level} · 📌 {card.topic} · {card.year}년 · 인용 {card.citations}회
@@ -304,7 +293,7 @@ export default function CardView({ card, showActions = true, showDelete = false,
         {!audioUrl ? (
           <button onClick={loadAudio} disabled={audioLoading}
             className="text-sm px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50 font-medium transition-colors">
-            {audioLoading ? '⏳ 음성 생성 중...' : '🔊 오디오로 듣기'}
+            {audioLoading ? '⏳ 15분 팟캐스트 생성 중... (1~2분 소요)' : '🎧 운동용 팟캐스트 듣기 (~15분)'}
           </button>
         ) : (
           <div className="space-y-2">
@@ -349,29 +338,21 @@ export default function CardView({ card, showActions = true, showDelete = false,
         if ((e.target as HTMLDetailsElement).open) loadDeepAnalysis()
       }}>
         <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-800 font-medium">🎓 깊이 공부하기</summary>
-        <div className="mt-3 relative">
+        <div className="mt-3">
           {deepLoading && !deepAnalysis && (
-            <p className="text-sm text-slate-400">분석 중...</p>
-          )}
-          {deepAnalysis && (
-            <div ref={deepContainerRef}
-              onScroll={() => {
-                const el = deepContainerRef.current
-                if (!el) return
-                setShowDeepScrollBtn(el.scrollHeight - el.scrollTop - el.clientHeight > 60)
-              }}
-              className="prose prose-sm max-w-none text-slate-700 text-sm leading-relaxed max-h-[500px] overflow-y-auto">
-              <ReactMarkdown components={mdComponents}>{deepAnalysis}</ReactMarkdown>
-              {deepLoading && (
-                <span className="inline-block w-1.5 h-4 bg-slate-400 animate-pulse ml-0.5 align-middle rounded" />
-              )}
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <span className="inline-flex gap-1">
+                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </span>
+              분석 중...
             </div>
           )}
-          {showDeepScrollBtn && (
-            <button onClick={() => deepContainerRef.current?.scrollTo({ top: deepContainerRef.current.scrollHeight, behavior: 'smooth' })}
-              className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-white border border-slate-200 shadow-md rounded-full w-8 h-8 flex items-center justify-center text-slate-500 active:bg-slate-50 transition-all z-10 touch-manipulation">
-              ↓
-            </button>
+          {deepAnalysis && (
+            <div className="prose prose-sm max-w-none text-slate-700 text-sm leading-relaxed">
+              <ReactMarkdown components={mdComponents}>{deepAnalysis}</ReactMarkdown>
+            </div>
           )}
         </div>
       </details>
@@ -423,45 +404,32 @@ export default function CardView({ card, showActions = true, showDelete = false,
 
           {/* 메시지 목록 */}
           {chatMessages.length > 0 && (
-            <div className="relative">
-              <div ref={chatContainerRef} onScroll={handleChatScroll}
-                className="space-y-2 max-h-[360px] overflow-y-auto px-1">
-                {chatMessages.map((m, i) => (
-                  <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] text-sm px-3 py-2 rounded-2xl ${
-                      m.role === 'user'
-                        ? 'bg-indigo-600 text-white rounded-tr-sm'
-                        : 'bg-slate-100 text-slate-800 rounded-tl-sm'
-                    }`}>
-                      {m.role === 'assistant' ? (
-                        <div className="prose prose-sm max-w-none">
+            <div className="space-y-2 px-1">
+              {chatMessages.map((m, i) => (
+                <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] text-sm px-3 py-2 rounded-2xl ${
+                    m.role === 'user'
+                      ? 'bg-indigo-600 text-white rounded-tr-sm'
+                      : 'bg-slate-100 text-slate-800 rounded-tl-sm'
+                  }`}>
+                    {m.role === 'assistant' ? (
+                      <div className="prose prose-sm max-w-none">
+                        {m.content ? (
                           <ReactMarkdown components={chatMdComponents}>{m.content}</ReactMarkdown>
-                          {chatLoading && i === chatMessages.length - 1 && m.content === '' && (
-                            <span className="inline-flex gap-1">
-                              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                            </span>
-                          )}
-                          {chatLoading && i === chatMessages.length - 1 && m.content !== '' && (
-                            <span className="inline-block w-1.5 h-3.5 bg-slate-400 animate-pulse ml-0.5 align-middle rounded" />
-                          )}
-                        </div>
-                      ) : (
-                        <p className="whitespace-pre-wrap">{m.content}</p>
-                      )}
-                    </div>
+                        ) : chatLoading && i === chatMessages.length - 1 ? (
+                          <span className="inline-flex gap-1">
+                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap">{m.content}</p>
+                    )}
                   </div>
-                ))}
-                <div ref={chatBottomRef} />
-              </div>
-              {/* ↓ 스크롤 버튼 (Gemini 스타일) */}
-              {showScrollBtn && (
-                <button onClick={scrollToBottom}
-                  className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-white border border-slate-200 shadow-md rounded-full w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-50 transition-all z-10">
-                  ↓
-                </button>
-              )}
+                </div>
+              ))}
             </div>
           )}
 

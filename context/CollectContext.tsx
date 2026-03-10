@@ -65,11 +65,44 @@ export function CollectProvider({ children }: { children: ReactNode }) {
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      let lastDataTime = Date.now()
+      const TIMEOUT_MS = 120000 // 2분 타임아웃
 
       while (true) {
-        const { done: streamDone, value } = await reader.read()
+        // 타임아웃 체크 - 2분간 데이터 없으면 중단
+        const timeSinceLastData = Date.now() - lastDataTime
+        if (timeSinceLastData > TIMEOUT_MS) {
+          setState(prev => ({
+            ...prev, running: false,
+            logs: [...prev.logs, '⏹ 응답 시간이 초과되어 중단됐어요.'],
+            done: { added: 0 },
+          }))
+          reader.cancel()
+          break
+        }
+
+        const readPromise = reader.read()
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS - timeSinceLastData)
+        )
+
+        let result: ReadableStreamReadResult<Uint8Array>
+        try {
+          result = await Promise.race([readPromise, timeoutPromise])
+        } catch {
+          setState(prev => ({
+            ...prev, running: false,
+            logs: [...prev.logs, '⏹ 응답 시간이 초과되어 중단됐어요.'],
+            done: { added: 0 },
+          }))
+          reader.cancel()
+          break
+        }
+
+        const { done: streamDone, value } = result
         if (streamDone) break
 
+        lastDataTime = Date.now()
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''

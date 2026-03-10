@@ -32,6 +32,13 @@ export default function CollectPage() {
   const [deepPct, setDeepPct] = useState(0)
   const [deepLogs, setDeepLogs] = useState<string[]>([])
   const [deepStats, setDeepStats] = useState<any>(null)
+  const [deepAbortRef] = useState<{ current: AbortController | null }>({ current: null })
+
+  // 정렬 상태
+  const [sortBy, setSortBy] = useState<'trust' | 'citations' | 'year_desc' | 'year_asc'>('trust')
+
+  // 카드 생성 ETA
+  const [cardStartTime, setCardStartTime] = useState(0)
 
   const loadStats = async () => {
     const [all, pending, approved] = await Promise.all([
@@ -113,16 +120,21 @@ export default function CollectPage() {
     setFoundPapers([])
     setSelectedIds(new Set())
 
+    const controller = new AbortController()
+    deepAbortRef.current = controller
+
     try {
       const res = await fetch('/api/deep-scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topicName: query }),
+        signal: controller.signal,
       })
 
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      let receivedPapers: any[] = []
 
       while (true) {
         const { done: streamDone, value } = await reader.read()
@@ -139,6 +151,7 @@ export default function CollectPage() {
             if (typeof data.pct === 'number') setDeepPct(data.pct)
             if (data.msg) setDeepLogs(prev => [...prev, data.msg])
             if (data.papers) {
+              receivedPapers = data.papers
               setFoundPapers(data.papers)
               setSelectedIds(new Set(data.papers.filter((p: any) => p.recommended).map((p: any) => p.paperId)))
             }
@@ -146,18 +159,69 @@ export default function CollectPage() {
           } catch {}
         }
       }
+
+      // 딥스캔 완료 후 제목 번역
+      if (receivedPapers.length > 0) {
+        setDeepLogs(prev => [...prev, '🌐 논문 제목 번역 중...'])
+        try {
+          const titlesToTranslate = receivedPapers.filter((p: any) => !p.titleKo && p.titleEn).slice(0, 50)
+          if (titlesToTranslate.length > 0) {
+            const batchSize = 25
+            for (let i = 0; i < titlesToTranslate.length; i += batchSize) {
+              const batch = titlesToTranslate.slice(i, i + batchSize)
+              const res = await fetch('/api/translate-titles', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ titles: batch.map((p: any) => p.titleEn) }),
+              })
+              const { translations } = await res.json()
+              if (translations?.length) {
+                const idToKo = new Map<string, string>()
+                batch.forEach((p: any, idx: number) => {
+                  if (translations[idx]) idToKo.set(p.paperId, translations[idx])
+                })
+                receivedPapers = receivedPapers.map((p: any) => idToKo.has(p.paperId) ? { ...p, titleKo: idToKo.get(p.paperId) } : p)
+                setFoundPapers([...receivedPapers])
+              }
+            }
+            setDeepLogs(prev => [...prev, '✅ 제목 번역 완료!'])
+          }
+        } catch {
+          setDeepLogs(prev => [...prev, '⚠️ 제목 번역 일부 실패'])
+        }
+      }
     } catch (e: any) {
-      setDeepLogs(prev => [...prev, `❌ 오류: ${e.message}`])
+      if (e.name === 'AbortError') {
+        setDeepLogs(prev => [...prev, '⏹ 딥스캔이 중단됐어요.'])
+      } else {
+        setDeepLogs(prev => [...prev, `❌ 오류: ${e.message}`])
+      }
     }
+    deepAbortRef.current = null
     setDeepScanning(false)
+  }
+
+  const handleDeepScanAbort = () => {
+    deepAbortRef.current?.abort()
   }
 
   // 카드 생성
   const handleGenerate = () => {
     const selected = foundPapers.filter(p => selectedIds.has(p.paperId))
     if (!selected.length || running) return
+    setCardStartTime(Date.now())
     start(searchPhaseQuery || query, selected)
   }
+
+  // 정렬된 논문 목록
+  const sortedPapers = [...foundPapers].sort((a, b) => {
+    switch (sortBy) {
+      case 'citations': return b.citations - a.citations
+      case 'year_desc': return b.year - a.year
+      case 'year_asc': return a.year - b.year
+      default: return 0 // trust: 기본 서버 정렬 유지
+    }
+  })
 
   const togglePaper = (id: string) => {
     setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
@@ -227,7 +291,7 @@ export default function CollectPage() {
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-purple-800">🔬 딥스캔 {deepScanning ? '진행 중...' : '완료'}</p>
             {deepScanning && (
-              <button onClick={() => setDeepScanning(false)}
+              <button onClick={handleDeepScanAbort}
                 className="text-xs bg-red-500 text-white px-3 py-1.5 rounded-lg touch-manipulation">중단</button>
             )}
           </div>
@@ -273,8 +337,24 @@ export default function CollectPage() {
             </div>
           </div>
 
+          {/* 정렬 */}
+          <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+            <span className="text-xs text-slate-400">정렬:</span>
+            {([
+              ['trust', '🏆 신뢰도순'],
+              ['citations', '📊 인용수순'],
+              ['year_desc', '📅 최신순'],
+              ['year_asc', '📅 오래된순'],
+            ] as const).map(([key, label]) => (
+              <button key={key} onClick={() => setSortBy(key)}
+                className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
+                  sortBy === key ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 active:bg-slate-200'
+                }`}>{label}</button>
+            ))}
+          </div>
+
           <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-            {foundPapers.map(p => (
+            {sortedPapers.map(p => (
               <label key={p.paperId} className={`flex gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
                 selectedIds.has(p.paperId) ? 'bg-indigo-50 border-indigo-300' : 'bg-slate-50 border-slate-200 active:bg-slate-100'
               }`}>
@@ -350,7 +430,15 @@ export default function CollectPage() {
           </div>
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-slate-400">
-              <span>{running ? '진행 중...' : done?.added ? `${done.added}개 완료` : '완료'}</span>
+              <span>{running ? (() => {
+                if (pct > 5 && cardStartTime > 0) {
+                  const elapsed = (Date.now() - cardStartTime) / 1000
+                  const remaining = Math.max(0, Math.round(elapsed / pct * (100 - pct)))
+                  if (remaining > 60) return `약 ${Math.ceil(remaining / 60)}분 남음`
+                  if (remaining > 0) return `약 ${remaining}초 남음`
+                }
+                return '진행 중...'
+              })() : done?.added ? `${done.added}개 완료` : '완료'}</span>
               <span className="font-semibold text-indigo-600">{pct}%</span>
             </div>
             <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">

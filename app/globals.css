@@ -28,7 +28,10 @@ html {
   border-radius: 99px;
 }
 
-/* details 열림 애니메이션 */
+/* details 열림 — 스크롤 점프 방지 */
+details {
+  overflow-anchor: none;
+}
 details[open] > *:not(summary) {
   animation: fadeIn 0.2s ease-out;
 }
