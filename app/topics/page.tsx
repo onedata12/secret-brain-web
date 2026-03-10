@@ -20,7 +20,9 @@ export default function TopicsPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<number>>(new Set())
   const [suggesting, setSuggesting] = useState(false)
+  const [addingBatch, setAddingBatch] = useState(false)
 
   const load = () => fetch('/api/topics').then(r => r.json()).then(setTopics)
   useEffect(() => { load() }, [])
@@ -58,6 +60,7 @@ export default function TopicsPage() {
     if (!name.trim()) return
     setSuggesting(true)
     setSuggestions([])
+    setSelectedSuggestions(new Set())
     const res = await fetch('/api/suggest-topics', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -66,6 +69,32 @@ export default function TopicsPage() {
     const data = await res.json()
     setSuggestions(Array.isArray(data) ? data : [])
     setSuggesting(false)
+  }
+
+  const toggleSuggestion = (i: number) => {
+    setSelectedSuggestions(prev => {
+      const n = new Set(prev)
+      if (n.has(i)) n.delete(i); else n.add(i)
+      return n
+    })
+  }
+
+  const addSelectedSuggestions = async () => {
+    if (selectedSuggestions.size === 0) return
+    setAddingBatch(true)
+    setError('')
+    for (const i of selectedSuggestions) {
+      const s = suggestions[i]
+      await fetch('/api/topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: s.name, query: s.query, active: true })
+      })
+    }
+    setSelectedSuggestions(new Set())
+    setSuggestions([])
+    await load()
+    setAddingBatch(false)
   }
 
   return (
@@ -120,16 +149,33 @@ export default function TopicsPage() {
           </button>
         </div>
 
-        {/* Claude 추천 결과 */}
+        {/* Claude 추천 결과 — 다중 선택 */}
         {suggestions.length > 0 && (
           <div className="mt-4 border-t border-slate-100 pt-4">
-            <p className="text-xs text-slate-500 mb-2">🤖 AI 추천 주제 — 클릭하면 자동 입력</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-slate-500">🤖 AI 추천 주제 — 여러 개 선택 후 한번에 추가</p>
+              {selectedSuggestions.size > 0 && (
+                <button onClick={addSelectedSuggestions} disabled={addingBatch}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 transition-colors">
+                  {addingBatch ? '추가 중...' : `✅ ${selectedSuggestions.size}개 추가하기`}
+                </button>
+              )}
+            </div>
             <div className="space-y-2">
               {suggestions.map((s, i) => (
-                <button key={i} onClick={() => { setName(s.name); setQuery(s.query) }}
-                  className="w-full text-left bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg px-3 py-2.5 transition-colors">
-                  <p className="text-sm font-medium text-purple-900">{s.name}</p>
-                  <p className="text-xs text-purple-600 mt-0.5 truncate">{s.query}</p>
+                <button key={i} onClick={() => toggleSuggestion(i)}
+                  className={`w-full text-left rounded-lg px-3 py-2.5 transition-colors border ${
+                    selectedSuggestions.has(i)
+                      ? 'bg-purple-100 border-purple-400 ring-2 ring-purple-300'
+                      : 'bg-purple-50 hover:bg-purple-100 border-purple-200'
+                  }`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{selectedSuggestions.has(i) ? '☑️' : '☐'}</span>
+                    <div>
+                      <p className="text-sm font-medium text-purple-900">{s.name}</p>
+                      <p className="text-xs text-purple-600 mt-0.5 truncate">{s.query}</p>
+                    </div>
+                  </div>
                 </button>
               ))}
             </div>

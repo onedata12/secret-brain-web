@@ -9,12 +9,12 @@ export async function POST(req: Request) {
 
   const msg = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 800,
+    max_tokens: 1500,
     messages: [{
       role: 'user',
       content: `사용자가 "${name}"라는 주제로 논문을 수집하려 합니다.
 
-이 주제와 관련된 추천 주제 6개를 JSON 배열로만 반환하세요. 각 항목은:
+이 주제와 관련된 추천 주제 10개를 JSON 배열로만 반환하세요. 다양한 세부 분야를 포함해줘. 각 항목은:
 - name: 한국어 주제명 (짧고 명확하게)
 - query: Semantic Scholar 검색용 영어 쿼리 (meta-analysis 또는 systematic review 포함)
 

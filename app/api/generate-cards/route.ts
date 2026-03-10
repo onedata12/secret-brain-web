@@ -19,6 +19,7 @@ async function generateCard(paper: any) {
 **아래 JSON 형식으로만 응답해. 다른 텍스트 없이 JSON만.**
 
 {
+  "paper_title_ko": "논문 제목을 한국어로 직역한 것 (학술적 느낌 유지)",
   "headline": "논문을 한 줄로 표현한 임팩트 있는 제목 (20자 이내, 말투: ~야/~해/~거야)",
   "one_line": "핵심 발견을 한 문장으로 (숫자/통계 포함하면 더 좋아)",
   "easy_explanation": "친한 친구한테 설명하듯이 3~4문장으로. 반말. 비유 써도 돼. 어려운 용어 금지.",

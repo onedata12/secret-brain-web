@@ -85,10 +85,21 @@ export default function CardView({ card, showActions = true, showDelete = false,
 
   const trust = getTrustInfo(card)
 
-  // 채팅 메시지 추가될 때마다 스크롤 아래로
-  useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages])
+  const [showScrollBtn, setShowScrollBtn] = useState(false)
+  const chatContainerRef = useRef<HTMLDivElement>(null)
+  const detailsRef = useRef<HTMLDetailsElement>(null)
+
+  // 스크롤 위치 감지 — 맨 아래가 아니면 ↓ 버튼 표시
+  const handleChatScroll = () => {
+    const el = chatContainerRef.current
+    if (!el) return
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+    setShowScrollBtn(!atBottom)
+  }
+
+  const scrollToBottom = () => {
+    chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })
+  }
 
   const copy = (text: string, key: string) => {
     navigator.clipboard.writeText(text)
@@ -113,18 +124,23 @@ export default function CardView({ card, showActions = true, showDelete = false,
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let answer = ''
+      let rafId = 0
+      let pending = false
+      const flush = () => { setChatMessages([...newMessages, { role: 'assistant', content: answer }]); pending = false }
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         answer += decoder.decode(value, { stream: true })
-        setChatMessages([...newMessages, { role: 'assistant', content: answer }])
+        if (!pending) { pending = true; rafId = requestAnimationFrame(flush) }
       }
+      cancelAnimationFrame(rafId)
+      setChatMessages([...newMessages, { role: 'assistant', content: answer }])
     } finally {
       setChatLoading(false)
     }
   }
 
-  // 스트리밍 깊이 공부하기
+  // 스트리밍 깊이 공부하기 (부드러운 렌더링)
   const loadDeepAnalysis = async () => {
     if (deepAnalysis || deepLoading) return
     setDeepLoading(true)
@@ -138,12 +154,17 @@ export default function CardView({ card, showActions = true, showDelete = false,
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let analysis = ''
+      let rafId = 0
+      let pending = false
+      const flush = () => { setDeepAnalysis(analysis); pending = false }
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         analysis += decoder.decode(value, { stream: true })
-        setDeepAnalysis(analysis)
+        if (!pending) { pending = true; rafId = requestAnimationFrame(flush) }
       }
+      cancelAnimationFrame(rafId)
+      setDeepAnalysis(analysis)
     } finally {
       setDeepLoading(false)
     }
@@ -202,6 +223,9 @@ export default function CardView({ card, showActions = true, showDelete = false,
           <h3 className="text-base md:text-lg font-bold text-slate-900">{card.headline}</h3>
           {card.paper_title && (
             <p className="text-xs text-slate-600 mt-0.5 leading-snug font-medium">{card.paper_title}</p>
+          )}
+          {card.paper_title_ko && (
+            <p className="text-xs text-slate-400 mt-0.5 leading-snug">{card.paper_title_ko}</p>
           )}
           <p className="text-xs text-slate-400 mt-1">
             {card.evidence_level} · 📌 {card.topic} · {card.year}년 · 인용 {card.citations}회
@@ -374,7 +398,11 @@ export default function CardView({ card, showActions = true, showDelete = false,
       )}
 
       {/* Q&A 채팅 — 스트리밍 + ChatGPT 스타일 */}
-      <details className="border-t border-slate-100 pt-3">
+      <details ref={detailsRef} className="border-t border-slate-100 pt-3" onToggle={e => {
+        if ((e.target as HTMLDetailsElement).open) {
+          setTimeout(() => detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
+        }
+      }}>
         <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-800 font-medium">💬 논문에 대해 질문하기</summary>
         <div className="mt-3 space-y-3">
           {/* 예시 질문 */}
@@ -389,35 +417,45 @@ export default function CardView({ card, showActions = true, showDelete = false,
 
           {/* 메시지 목록 */}
           {chatMessages.length > 0 && (
-            <div className="space-y-2 max-h-[360px] overflow-y-auto px-1">
-              {chatMessages.map((m, i) => (
-                <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] text-sm px-3 py-2 rounded-2xl ${
-                    m.role === 'user'
-                      ? 'bg-indigo-600 text-white rounded-tr-sm'
-                      : 'bg-slate-100 text-slate-800 rounded-tl-sm'
-                  }`}>
-                    {m.role === 'assistant' ? (
-                      <div className="prose prose-sm max-w-none">
-                        <ReactMarkdown components={chatMdComponents}>{m.content}</ReactMarkdown>
-                        {chatLoading && i === chatMessages.length - 1 && m.content === '' && (
-                          <span className="inline-flex gap-1">
-                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                          </span>
-                        )}
-                        {chatLoading && i === chatMessages.length - 1 && m.content !== '' && (
-                          <span className="inline-block w-1.5 h-3.5 bg-slate-400 animate-pulse ml-0.5 align-middle rounded" />
-                        )}
-                      </div>
-                    ) : (
-                      <p className="whitespace-pre-wrap">{m.content}</p>
-                    )}
+            <div className="relative">
+              <div ref={chatContainerRef} onScroll={handleChatScroll}
+                className="space-y-2 max-h-[360px] overflow-y-auto px-1">
+                {chatMessages.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] text-sm px-3 py-2 rounded-2xl ${
+                      m.role === 'user'
+                        ? 'bg-indigo-600 text-white rounded-tr-sm'
+                        : 'bg-slate-100 text-slate-800 rounded-tl-sm'
+                    }`}>
+                      {m.role === 'assistant' ? (
+                        <div className="prose prose-sm max-w-none">
+                          <ReactMarkdown components={chatMdComponents}>{m.content}</ReactMarkdown>
+                          {chatLoading && i === chatMessages.length - 1 && m.content === '' && (
+                            <span className="inline-flex gap-1">
+                              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </span>
+                          )}
+                          {chatLoading && i === chatMessages.length - 1 && m.content !== '' && (
+                            <span className="inline-block w-1.5 h-3.5 bg-slate-400 animate-pulse ml-0.5 align-middle rounded" />
+                          )}
+                        </div>
+                      ) : (
+                        <p className="whitespace-pre-wrap">{m.content}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-              <div ref={chatBottomRef} />
+                ))}
+                <div ref={chatBottomRef} />
+              </div>
+              {/* ↓ 스크롤 버튼 (Gemini 스타일) */}
+              {showScrollBtn && (
+                <button onClick={scrollToBottom}
+                  className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-white border border-slate-200 shadow-md rounded-full w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-50 transition-all z-10">
+                  ↓
+                </button>
+              )}
             </div>
           )}
 
