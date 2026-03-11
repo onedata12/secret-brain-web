@@ -40,7 +40,6 @@ async function generateCard(paper: any) {
   const match = text.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('JSON not found')
   const cardData = JSON.parse(match[0])
-  // paper_title_ko는 DB 컬럼이 없으므로 제거
   delete cardData.paper_title_ko
   return {
     id: paper.id,

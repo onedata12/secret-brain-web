@@ -77,12 +77,14 @@ async function saveCache(cardId: string, type: string, content: any) {
   } catch {}
 }
 
-// 경과 시간 포맷
-function formatElapsed(startTime: number) {
+// 남은 시간 포맷 (예상 시간 기반 카운트다운)
+function formatRemaining(startTime: number, estimatedSec: number) {
   const elapsed = Math.round((Date.now() - startTime) / 1000)
-  if (elapsed < 5) return ''
-  if (elapsed < 60) return `${elapsed}초 경과`
-  return `${Math.floor(elapsed / 60)}분 ${elapsed % 60}초 경과`
+  const remaining = Math.max(0, estimatedSec - elapsed)
+  if (elapsed < 2) return ''
+  if (remaining <= 0) return '거의 완료...'
+  if (remaining >= 60) return `약 ${Math.ceil(remaining / 60)}분 남음`
+  return `약 ${remaining}초 남음`
 }
 
 type Props = {
@@ -109,27 +111,40 @@ export default function CardView({ card, showActions = true, showDelete = false,
   const [playbackRate, setPlaybackRate] = useState(1.0)
   const audioRef = useRef<HTMLAudioElement>(null)
 
-  // 진행률 타이머
-  const [loadStartTime, setLoadStartTime] = useState(0)
-  const [elapsed, setElapsed] = useState('')
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // 독립 타이머: 깊이공부 / 원문읽기 / 채팅
+  const [deepRemaining, setDeepRemaining] = useState('')
+  const [translateRemaining, setTranslateRemaining] = useState('')
+  const [chatRemaining, setChatRemaining] = useState('')
+  const deepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const translateTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const chatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const startTimer = () => {
+  const startTimer = (type: 'deep' | 'translate' | 'chat') => {
     const start = Date.now()
-    setLoadStartTime(start)
-    setElapsed('')
-    timerRef.current = setInterval(() => {
-      setElapsed(formatElapsed(start))
+    const estimatedSec = type === 'deep' ? 25 : type === 'translate' ? 8 : 12
+    const setFn = type === 'deep' ? setDeepRemaining : type === 'translate' ? setTranslateRemaining : setChatRemaining
+    const refObj = type === 'deep' ? deepTimerRef : type === 'translate' ? translateTimerRef : chatTimerRef
+    if (refObj.current) clearInterval(refObj.current)
+    setFn('')
+    refObj.current = setInterval(() => {
+      setFn(formatRemaining(start, estimatedSec))
     }, 1000)
   }
 
-  const stopTimer = () => {
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
-    setElapsed('')
-    setLoadStartTime(0)
+  const stopTimer = (type: 'deep' | 'translate' | 'chat') => {
+    const refObj = type === 'deep' ? deepTimerRef : type === 'translate' ? translateTimerRef : chatTimerRef
+    const setFn = type === 'deep' ? setDeepRemaining : type === 'translate' ? setTranslateRemaining : setChatRemaining
+    if (refObj.current) { clearInterval(refObj.current); refObj.current = null }
+    setFn('')
   }
 
-  useEffect(() => { return () => { if (timerRef.current) clearInterval(timerRef.current) } }, [])
+  useEffect(() => {
+    return () => {
+      if (deepTimerRef.current) clearInterval(deepTimerRef.current)
+      if (translateTimerRef.current) clearInterval(translateTimerRef.current)
+      if (chatTimerRef.current) clearInterval(chatTimerRef.current)
+    }
+  }, [])
 
   const trust = getTrustInfo(card)
 
@@ -164,7 +179,7 @@ export default function CardView({ card, showActions = true, showDelete = false,
     setChatMessages([...newMessages, { role: 'assistant', content: '' }])
     setChatInput('')
     setChatLoading(true)
-    startTimer()
+    startTimer('chat')
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -185,7 +200,7 @@ export default function CardView({ card, showActions = true, showDelete = false,
       saveCache(card.id, 'chat', finalMessages)
     } finally {
       setChatLoading(false)
-      stopTimer()
+      stopTimer('chat')
     }
   }
 
@@ -194,7 +209,7 @@ export default function CardView({ card, showActions = true, showDelete = false,
     if (deepAnalysis || deepLoading) return
     setDeepLoading(true)
     setDeepAnalysis('')
-    startTimer()
+    startTimer('deep')
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -214,14 +229,14 @@ export default function CardView({ card, showActions = true, showDelete = false,
       saveCache(card.id, 'deep', analysis)
     } finally {
       setDeepLoading(false)
-      stopTimer()
+      stopTimer('deep')
     }
   }
 
   const loadTranslation = async () => {
     if (sentences.length > 0) { setShowReader(true); return }
     setTranslateLoading(true)
-    startTimer()
+    startTimer('translate')
     try {
       const res = await fetch('/api/translate', {
         method: 'POST',
@@ -235,7 +250,7 @@ export default function CardView({ card, showActions = true, showDelete = false,
       saveCache(card.id, 'translation', data)
     } finally {
       setTranslateLoading(false)
-      stopTimer()
+      stopTimer('translate')
     }
   }
 
@@ -273,7 +288,7 @@ export default function CardView({ card, showActions = true, showDelete = false,
   }
 
   // 로딩 인디케이터 컴포넌트
-  const LoadingIndicator = ({ label }: { label: string }) => (
+  const LoadingIndicator = ({ label, remaining }: { label: string; remaining: string }) => (
     <div className="flex items-center gap-2 text-sm text-slate-400 py-2">
       <span className="inline-flex gap-1">
         <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -281,7 +296,7 @@ export default function CardView({ card, showActions = true, showDelete = false,
         <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
       </span>
       <span>{label}</span>
-      {elapsed && <span className="text-xs text-slate-300 ml-1">({elapsed})</span>}
+      {remaining && <span className="text-xs text-slate-300 ml-1">({remaining})</span>}
     </div>
   )
 
@@ -421,7 +436,7 @@ export default function CardView({ card, showActions = true, showDelete = false,
           🎓 깊이 공부하기 {deepAnalysis && <span className="text-xs text-green-500 ml-1">✓ 분석 완료</span>}
         </summary>
         <div className="mt-3">
-          {deepLoading && !deepAnalysis && <LoadingIndicator label="심층 분석 중... (보통 15~30초)" />}
+          {deepLoading && !deepAnalysis && <LoadingIndicator label="심층 분석 중..." remaining={deepRemaining} />}
           {deepAnalysis && (
             <div className="prose prose-sm max-w-none text-slate-700 text-sm leading-relaxed">
               <ReactMarkdown components={mdComponents}>{deepAnalysis}</ReactMarkdown>
@@ -437,7 +452,7 @@ export default function CardView({ card, showActions = true, showDelete = false,
             onClick={() => !showReader && sentences.length === 0 && loadTranslation()}>
             📖 초록 원문 읽기 (영/한) {sentences.length > 0 && <span className="text-xs text-green-500 ml-1">✓ 번역 완료</span>}
           </summary>
-          {translateLoading && <LoadingIndicator label="번역 중... (보통 5~10초)" />}
+          {translateLoading && <LoadingIndicator label="번역 중..." remaining={translateRemaining} />}
           {(showReader || sentences.length > 0) && sentences.length > 0 && (
             <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 max-h-80 overflow-y-auto">
               <div>
@@ -509,7 +524,7 @@ export default function CardView({ card, showActions = true, showDelete = false,
           )}
 
           {/* 로딩 */}
-          {chatLoading && <LoadingIndicator label="답변 생성 중..." />}
+          {chatLoading && <LoadingIndicator label="답변 생성 중..." remaining={chatRemaining} />}
 
           {/* 입력창 */}
           <div className="flex gap-2">

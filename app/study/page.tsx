@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import type { Card } from '@/lib/supabase'
 
@@ -27,8 +27,6 @@ export default function StudyPage() {
   const [feynmanMessages, setFeynmanMessages] = useState<{ role: string; content: string }[]>([])
   const [feynmanInput, setFeynmanInput] = useState('')
   const [feynmanLoading, setFeynmanLoading] = useState(false)
-  const [showScrollBtn, setShowScrollBtn] = useState(false)
-  const chatContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetch('/api/cards?status=approved').then(r => r.json()).then(data => {
@@ -36,16 +34,6 @@ export default function StudyPage() {
       if (data.length > 0) setFeynmanCard(data[0])
     })
   }, [])
-
-  const handleChatScroll = () => {
-    const el = chatContainerRef.current
-    if (!el) return
-    setShowScrollBtn(el.scrollHeight - el.scrollTop - el.clientHeight > 60)
-  }
-
-  const scrollToBottom = () => {
-    chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })
-  }
 
   const dueCards = getDueCards(cards)
 
@@ -76,16 +64,11 @@ export default function StudyPage() {
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let answer = ''
-      let rafId = 0
-      let pending = false
-      const flush = () => { setFeynmanMessages([...newMessages, { role: 'assistant', content: answer }]); pending = false }
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         answer += decoder.decode(value, { stream: true })
-        if (!pending) { pending = true; rafId = requestAnimationFrame(flush) }
       }
-      cancelAnimationFrame(rafId)
       setFeynmanMessages([...newMessages, { role: 'assistant', content: answer }])
     } finally {
       setFeynmanLoading(false)
@@ -181,43 +164,32 @@ export default function StudyPage() {
               </select>
 
               <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
-                <div className="relative">
-                  <div ref={chatContainerRef} onScroll={handleChatScroll}
-                    className="space-y-2 max-h-[400px] overflow-y-auto px-1">
-                    {feynmanMessages.map((m, i) => (
-                      <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] text-sm px-3 py-2 rounded-2xl ${
-                          m.role === 'user'
-                            ? 'bg-indigo-600 text-white rounded-tr-sm'
-                            : 'bg-slate-100 text-slate-800 rounded-tl-sm'
-                        }`}>
-                          {m.role === 'assistant' ? (
-                            <div className="prose prose-sm max-w-none">
+                <div className="space-y-2 px-1">
+                  {feynmanMessages.map((m, i) => (
+                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] text-sm px-3 py-2 rounded-2xl ${
+                        m.role === 'user'
+                          ? 'bg-indigo-600 text-white rounded-tr-sm'
+                          : 'bg-slate-100 text-slate-800 rounded-tl-sm'
+                      }`}>
+                        {m.role === 'assistant' ? (
+                          <div className="prose prose-sm max-w-none">
+                            {m.content ? (
                               <ReactMarkdown>{m.content}</ReactMarkdown>
-                              {feynmanLoading && i === feynmanMessages.length - 1 && m.content === '' && (
-                                <span className="inline-flex gap-1">
-                                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                                </span>
-                              )}
-                              {feynmanLoading && i === feynmanMessages.length - 1 && m.content !== '' && (
-                                <span className="inline-block w-1.5 h-3.5 bg-slate-400 animate-pulse ml-0.5 align-middle rounded" />
-                              )}
-                            </div>
-                          ) : (
-                            <p className="whitespace-pre-wrap">{m.content}</p>
-                          )}
-                        </div>
+                            ) : feynmanLoading && i === feynmanMessages.length - 1 ? (
+                              <span className="inline-flex gap-1">
+                                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap">{m.content}</p>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                  {showScrollBtn && (
-                    <button onClick={scrollToBottom}
-                      className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-white border border-slate-200 shadow-md rounded-full w-8 h-8 flex items-center justify-center text-slate-500 active:bg-slate-50 transition-all z-10 touch-manipulation">
-                      ↓
-                    </button>
-                  )}
+                    </div>
+                  ))}
                 </div>
 
                 {feynmanMessages.length === 0 ? (
