@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '@/lib/supabase'
 import { searchPapersOpenAlex } from '@/lib/openalex'
+import { translateToSearchQuery } from '@/lib/query-translate'
 
 export const maxDuration = 60
 
@@ -63,19 +64,6 @@ async function generateCard(paper: any, topic: string) {
   }
 }
 
-async function queryToSearchTerms(query: string): Promise<string> {
-  const msg = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 150,
-    messages: [{
-      role: 'user',
-      content: `Convert this Korean topic to a precise English academic search query (max 5-6 words, psychology/behavioral science terms only).
-Korean: "${query}"
-Query:`
-    }]
-  })
-  return (msg.content[0] as { text: string }).text.trim().replace(/^"|"$/g, '')
-}
 
 export async function GET() {
   try {
@@ -91,7 +79,7 @@ export async function GET() {
     const topic = topics[dayIndex]
 
     // 검색어 변환
-    const searchQuery = await queryToSearchTerms(topic.query || topic.name)
+    const searchQuery = await translateToSearchQuery(topic.query || topic.name)
 
     // OpenAlex에서 논문 검색
     const papers = await searchPapersOpenAlex(searchQuery, 10)

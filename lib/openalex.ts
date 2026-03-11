@@ -56,8 +56,7 @@ function mapWork(w: any) {
 export async function searchPapersOpenAlex(query: string, maxResults = 20) {
   const params = new URLSearchParams({
     search: query,
-    filter: 'has_abstract:true',
-    'per-page': String(maxResults),
+    'per-page': String(Math.min(maxResults * 2, 50)),
     select: 'id,title,abstract_inverted_index,publication_year,authorships,cited_by_count,doi,type',
     mailto: 'secretbrain@research.kr',
   })
@@ -71,6 +70,7 @@ export async function searchPapersOpenAlex(query: string, maxResults = 20) {
     .map(mapWork)
     .filter((p: any) => p.abstract && p.title)
     .sort((a: any, b: any) => b.trustScore - a.trustScore)
+    .slice(0, maxResults)
 }
 
 // 커서 기반 페이지네이션 검색
@@ -81,7 +81,6 @@ export async function searchPapersOpenAlexPaged(
 ): Promise<{ papers: any[]; nextCursor: string | null; totalCount: number }> {
   const params = new URLSearchParams({
     search: query,
-    filter: 'has_abstract:true',
     'per-page': String(perPage),
     select: 'id,title,abstract_inverted_index,publication_year,authorships,cited_by_count,doi,type',
     mailto: 'secretbrain@research.kr',

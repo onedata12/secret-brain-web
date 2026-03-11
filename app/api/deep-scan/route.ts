@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '@/lib/supabase'
 import { deepScanOpenAlex } from '@/lib/openalex'
+import { translateToSearchQuery } from '@/lib/query-translate'
 
 export const maxDuration = 60
 
@@ -13,26 +14,29 @@ async function generateSearchQueries(topic: string): Promise<string[]> {
     max_tokens: 500,
     messages: [{
       role: 'user',
-      content: `You are an academic research expert. For the topic "${topic}", generate 5 diverse English search queries that would find different aspects of this research area.
+      content: `Generate 5 diverse English academic search queries for this topic: ${topic}
 
-Rules:
-- Each query should be 3-6 words, specific academic terms
-- Cover different angles: foundational theories, recent advances, practical applications, meta-analyses, interventions
-- One query should specifically target meta-analyses or systematic reviews
-- No duplicate concepts across queries
+Rules: 3-6 words each, specific academic terms, cover different angles (theories, applications, meta-analyses, interventions). Return ONLY a JSON array.
 
-Return ONLY a JSON array of strings, no explanation.
-Example: ["sleep cognitive performance memory","sleep deprivation workplace productivity","sleep intervention meta-analysis","circadian rhythm mental health","sleep hygiene behavior change"]`
+Examples for "수면":
+["sleep cognitive performance memory","sleep deprivation workplace productivity","sleep intervention meta-analysis","circadian rhythm mental health","sleep hygiene behavior change"]
+
+Examples for "습관":
+["habit formation behavior change","daily routine self-regulation","habit loop reward system","behavioral intervention habit","automaticity habit strength"]`
     }]
   })
 
   try {
     let text = (msg.content[0] as { text: string }).text.trim()
     text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '')
-    return JSON.parse(text)
+    const arr = JSON.parse(text)
+    // 결과가 영어 배열인지 검증
+    if (Array.isArray(arr) && arr.length > 0 && typeof arr[0] === 'string') return arr
+    throw new Error('invalid')
   } catch {
-    // 폴백: 기본 검색어
-    return [`${topic} meta-analysis`, `${topic} systematic review`, `${topic} intervention`]
+    // 폴백: 토픽을 영어로 그대로 사용하거나 기본 검색어
+    const base = /^[a-zA-Z\s]+$/.test(topic) ? topic : 'psychology behavior'
+    return [`${base} meta-analysis`, `${base} systematic review`, `${base} intervention`, `${base} cognitive`, `${base} wellbeing`]
   }
 }
 
@@ -50,9 +54,11 @@ export async function POST(req: Request) {
       }
 
       try {
+        // 0. 한국어 → 영어 변환
+        const englishTopic = await translateToSearchQuery(topicName)
         // 1. 검색어 생성
-        send({ pct: 5, msg: `🤖 "${topicName}" 관련 다각도 검색어 생성 중...` })
-        const queries = await generateSearchQueries(topicName)
+        send({ pct: 5, msg: `🤖 "${topicName}" 관련 다각도 검색어 생성 중... (${englishTopic})` })
+        const queries = await generateSearchQueries(englishTopic)
         send({ pct: 10, msg: `📋 ${queries.length}개 검색어 생성: ${queries.join(' | ')}` })
 
         // 2. 기존 카드 ID 조회 (중복 방지)

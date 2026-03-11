@@ -1,48 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '@/lib/supabase'
 import { searchPapersOpenAlex } from '@/lib/openalex'
+import { translateToSearchQuery } from '@/lib/query-translate'
 
 export const maxDuration = 60
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-async function queryToSearchTerms(query: string): Promise<string> {
-  const msg = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 150,
-    messages: [{
-      role: 'user',
-      content: `You help find psychology/behavioral science research papers for a Korean life-management productivity app called "Secret Brain". Users want evidence-based insights about improving their daily lives, habits, and productivity.
-
-Convert this Korean topic to a precise English academic search query. Be SPECIFIC and NARROW - only the core topic.
-
-Korean topic: "${query}"
-
-STRICT Rules:
-- Maximum 5-6 words
-- Only the CORE topic words, highly specific
-- Psychology/behavioral science terms only
-- NO medical terms unless the topic is medical
-- NO "meta-analysis", "systematic review", "methodology" etc
-- Return ONLY the query string
-
-Examples (notice how specific and narrow):
-- "생산성" → "work productivity self-regulation performance"
-- "수면" → "sleep quality cognitive performance"
-- "운동과 뇌" → "exercise cognitive function brain"
-- "스트레스" → "stress reduction psychological intervention"
-- "습관" → "habit formation behavior change"
-- "집중력" → "attention concentration cognitive performance"
-- "동기부여" → "motivation goal setting achievement"
-- "번아웃" → "burnout workplace exhaustion recovery"
-- "감사일기" → "gratitude journaling wellbeing happiness"
-- "인간관계" → "social relationships wellbeing mental health"
-
-Query:`
-    }]
-  })
-  return (msg.content[0] as { text: string }).text.trim().replace(/^"|"$/g, '')
-}
 
 async function translateTitles(papers: any[]): Promise<string[]> {
   const titles = papers.map((p, i) => `${i + 1}. ${p.title}`).join('\n')
@@ -197,7 +160,7 @@ export async function POST(req: Request) {
           send({ pct: 10, msg: `✨ ${newPapers.length}개 신규 논문 처리 시작` })
         } else {
           send({ pct: 3, msg: `🔍 "${query}" 검색어 변환 중...` })
-          const searchQuery = await queryToSearchTerms(query)
+          const searchQuery = await translateToSearchQuery(query)
           send({ pct: 8, msg: `📌 검색어: ${searchQuery}` })
 
           send({ pct: 10, msg: '📚 OpenAlex에서 논문 검색 중...' })

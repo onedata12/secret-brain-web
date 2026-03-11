@@ -1,24 +1,9 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { searchPapersOpenAlexPaged } from '@/lib/openalex'
+import { translateToSearchQuery } from '@/lib/query-translate'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-async function queryToSearchTerms(query: string): Promise<string> {
-  const msg = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 150,
-    messages: [{
-      role: 'user',
-      content: `You help find psychology/behavioral science research for a Korean productivity app. Convert this Korean topic to a precise English academic search query. Maximum 5-6 words, core topic only, no meta-analysis/review keywords.
-
-Korean: "${query}"
-Examples: "생산성" → "work productivity self-regulation performance", "수면" → "sleep quality cognitive performance", "습관" → "habit formation behavior change"
-Query:`
-    }]
-  })
-  return (msg.content[0] as { text: string }).text.trim().replace(/^"|"$/g, '')
-}
 
 async function translateTitles(papers: any[]): Promise<string[]> {
   if (!papers.length) return []
@@ -63,7 +48,7 @@ export async function POST(req: Request) {
 
   try {
     // 첫 검색이면 검색어 변환, "더 불러오기"면 기존 검색어 재사용
-    const searchQuery = existingSearchQuery || await queryToSearchTerms(query)
+    const searchQuery = existingSearchQuery || await translateToSearchQuery(query)
     const { papers, nextCursor, totalCount } = await searchPapersOpenAlexPaged(searchQuery, 30, cursor || undefined)
 
     if (!papers.length) return NextResponse.json({ papers: [], searchQuery, nextCursor: null, totalCount })
